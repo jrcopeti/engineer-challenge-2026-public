@@ -36,8 +36,8 @@ customer profile history, internal notes, a small metrics panel, search, and CSV
    node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
    ```
 
-   The defaults run the app fully offline — the Summarize feature uses a built-in canned
-   summarizer (`FAKE_LLM=true`), so no API key is required.
+   The defaults run the app fully offline — the Summarize feature uses a built-in fake
+   summarizer (`LLM_PROVIDER=fake`), so no API key is required.
 
 3. Seed the database with sample users, customers, and feedback:
 
@@ -80,6 +80,11 @@ npm run typecheck    # both workspaces
 To use a real model for the Summarize feature, set the following in `server/.env`:
 
 ```bash
-FAKE_LLM=false
-OPENAI_API_KEY=sk-...
+LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+# ANTHROPIC_MODEL=claude-haiku-4-5   # optional override
 ```
+
+The server refuses to start with `LLM_PROVIDER=anthropic` and no key. Provider failures
+(timeout, rate limit, bad key) surface as a 502 with a plain message; they never take the
+rest of the app down.

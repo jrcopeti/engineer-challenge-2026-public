@@ -333,3 +333,52 @@ cause: it returned the review as a message instead of calling `gh pr comment`. F
 PR #5's prompt (the official example's "only post GitHub comments" line); job re-run on
 #6. Third distinct way a green check meant nothing (skip on PR #1, skip on PR #4, silent
 no-post here). Lesson: the check mark is not the review — read the log or the comment.
+
+**PR #6 review: silent twice** (rerun too: 14 turns, 3 denials, no comment). I merged on
+my own review. Agent's mistake in the middle: it pushed the "post, don't return" prompt
+fix to PR #5's branch *after* #5 had merged and told me it was in — it wasn't. I asked
+how that could be; it checked, admitted it, cherry-picked onto a fresh branch (PR #7),
+deleted the orphan. Lesson: check PR state before pushing to its branch.
+
+I clarified my actual requirement: review on open, not on push — already delivered by
+#5. Declined the extra `show_full_output` debug switch; leaving the hidden-output
+problem for KNOWN-ISSUES unless it recurs.
+
+---
+
+## 6. Anthropic summarizer — `feat/anthropic-summarizer` (19:57–)
+
+**My prompt:** "I merged PR #6 … I just need the CI to trigger the review when Open the
+PR and not rerun when push changes" → confirmed already done; proceed to phase 5.
+
+**Question before commit:** *why is `AnthropicSummarizer` a class — why are you writing
+classes?* — Agent's honest answer: habit, not necessity. It holds a client and a model
+name and has one method; a closure does the same with less ceremony and matches the rest
+of the codebase, which is all functions (the only classes are `Error` subclasses, where
+`instanceof` needs one). The test double was already a plain object literal, proving the
+class was never required. **Converted both providers to factory functions** returning
+`{ summarize }`. CLAUDE.md already says "code that reads like the surrounding code"; the
+agent didn't apply its own rule until asked.
+
+**Agent did (19:57–20:05):**
+- Loaded the `claude-api` skill first instead of writing SDK code from memory. It flagged
+  that its default is `claude-opus-5`; I confirmed **Haiku 4.5** (approved plan; two-
+  sentence summaries don't need the large model). Model is an env override.
+- `server/src/llm/`: `summarizer.ts` (interface + `SummarizerError`), `fake.ts`,
+  `anthropic.ts` (`@anthropic-ai/sdk`, 10 s timeout, 1 retry, `max_tokens` 200, system
+  prompt that treats the customer text as untrusted data inside `<customer_message>`
+  tags, SDK error classes mapped to user-safe messages), `index.ts` factory that refuses
+  `anthropic` without a key. OpenAI removed everywhere.
+- `app.ts` exports `createApp({ summarizer })` so failure paths are testable; provider
+  failure → 502 with a plain message, anything else stays a 500 that leaks nothing.
+- Agent hit a circular import (contract in `index.ts`, providers importing it) and split
+  the contract into `summarizer.ts`.
+- 5 tests (57 total): fake output contains the real message; 502 on `SummarizerError`;
+  500 without leaking on unexpected errors; factory refuses missing key.
+
+**Verified:** boot with `LLM_PROVIDER=anthropic` and no key refuses with the variable
+name. **Live summary with my real key (20:05–20:14): works** — I ran that myself; the
+agent had no key and did not ask me to paste one.
+
+**Also:** rebased onto `shippable` after PR #7 merged so the workflow file matches and
+the review can actually run.
