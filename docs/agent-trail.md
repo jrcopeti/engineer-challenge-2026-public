@@ -515,3 +515,14 @@ The agent's verification had only checked that the title and message changed. Fi
 resets, rather than listing fields to clear in `load()` and missing one later. Verified
 with the reviewer's exact repro using a real Anthropic summary. Also hoisted the
 duplicated history filter the reviewer flagged.
+
+**Question (21:25):** *explain the bug fix.* — Same component type at the same tree
+position with a changed prop keeps its instance and state; `key` changes identity and
+forces a remount. Chose `key` over resetting fields in `load()` because a list of fields
+to clear is a checklist the next engineer will forget to extend.
+
+---
+
+## 10. Docs + final review — `docs/handin` (21:30–)
+
+**My prompt:** "#12 merged, start phase 8."
