@@ -2,7 +2,9 @@ name: Claude review
 
 on:
   pull_request:
-    types: [opened, synchronize, ready_for_review]
+    # No `synchronize`: one review per PR at open. For a deliberate re-review after
+    # addressing findings, convert the PR to draft and back to ready.
+    types: [opened, ready_for_review]
 
 jobs:
   review:
