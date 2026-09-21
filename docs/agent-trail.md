@@ -334,6 +334,7 @@ PR #5's prompt (the official example's "only post GitHub comments" line); job re
 #6. Third distinct way a green check meant nothing (skip on PR #1, skip on PR #4, silent
 no-post here). Lesson: the check mark is not the review — read the log or the comment.
 
+<<<<<<< HEAD
 **PR #6 review: silent twice** (rerun too: 14 turns, 3 denials, no comment). I merged on
 my own review. Agent's mistake in the middle: it pushed the "post, don't return" prompt
 fix to PR #5's branch *after* #5 had merged and told me it was in — it wasn't. I asked
@@ -382,3 +383,12 @@ agent had no key and did not ask me to paste one.
 
 **Also:** rebased onto `shippable` after PR #7 merged so the workflow file matches and
 the review can actually run.
+=======
+**Correction (20:35).** The "three silent reviews" were one silent review and two bad
+checks by the agent: its monitor filtered comments on login `claude`, but the API returns
+`claude[bot]`; and once it queried the instant the job finished, before the comment had
+landed. #6's rerun and #8's first run both posted. PRs #5, #7 and #9 (trigger change,
+prompt line, revert) were therefore churn on bad evidence — I asked for #9 to restore the
+original, which is where we ended up anyway. The agent owned this without being asked
+once the #8 comment appeared. The lesson it had logged three times applied to itself.
+>>>>>>> 25b3f7a (Correct the review-action record: one silent run, two bad checks)
