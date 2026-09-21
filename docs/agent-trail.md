@@ -211,3 +211,21 @@ detail → save routing (200) → add note (201) → summarize (200), DB matches
 **Left for later:** `/resolve` still toggles (phase 3, commented in code); `due_at`
 normalisation to ISO (phase 3); `csvCell` formulas + private notes in export (phase 4);
 route split (phase 6).
+
+**PR #3 automated review (17:55):** confirmed no interpolated SQL remains. Four findings:
+private notes + formulas in export (phase 4, planned), `due_at` mixed formats (phase 3,
+planned), **`CREATE TABLE IF NOT EXISTS` never upgrades an existing `pulse.db`** (valid —
+the README said "reseed" but nothing enforced it), and **no tests for `/customers/:id`
+and `/resolve`** even though both were touched (valid — our own rule).
+
+*I asked what a `user_version` boot check means* (SQLite header integer used as a schema
+version; detect a stale DB and refuse to boot with a "run `npm run seed`" message) and
+told the agent to implement it. It did (~60 lines: version stamp, boot check, a separate
+`open-database.ts` because the seed was blocked by the check it was meant to fix, 4 tests,
+README). Then I read the diff and **overruled it: overkill for something a reseed solves.**
+The stale-DB case goes in KNOWN-ISSUES as "no migrations; reseed after schema changes"
+instead. Kept only the two missing route tests (`/customers/:id`, `/resolve`) the
+reviewer flagged — 42 tests total.
+
+Lesson for the trail: an agent will happily build what you ask for; reading the diff
+before committing is where the scope call actually gets made.

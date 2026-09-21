@@ -240,3 +240,39 @@ describe('error handling', () => {
     expect(res.status).toBe(400)
   })
 })
+
+describe('GET /customers/:id', () => {
+  it('returns the profile with joined feedback history, newest first', async () => {
+    const res = await request(app).get('/customers/1').set(bearer())
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ id: 1, name: 'Olivia Bennett', plan: 'Enterprise' })
+    expect(res.body.history.length).toBeGreaterThan(0)
+    expect(res.body.history.length).toBeLessThanOrEqual(8)
+    for (const item of res.body.history) {
+      expect(item.customer_id).toBe(1)
+      expect(item.customer_name).toBe('Olivia Bennett')
+    }
+    const dates = res.body.history.map((i: { created_at: string }) => i.created_at)
+    expect(dates).toEqual([...dates].sort().reverse())
+  })
+
+  it('returns 404 for an unknown customer and 400 for a non-numeric id', async () => {
+    expect((await request(app).get('/customers/9999').set(bearer())).status).toBe(404)
+    expect((await request(app).get('/customers/1%20OR%201=1').set(bearer())).status).toBe(400)
+  })
+})
+
+describe('POST /feedback/:id/resolve', () => {
+  it('flips open → resolved and back (toggle semantics until phase 3)', async () => {
+    const first = await request(app).post('/feedback/4/resolve').set(bearer())
+    expect(first.status).toBe(200)
+    expect(first.body.status).toBe('resolved')
+    const second = await request(app).post('/feedback/4/resolve').set(bearer())
+    expect(second.body.status).toBe('open')
+  })
+
+  it('returns 404 for an unknown id and 400 for a non-numeric id', async () => {
+    expect((await request(app).post('/feedback/9999/resolve').set(bearer())).status).toBe(404)
+    expect((await request(app).post('/feedback/abc/resolve').set(bearer())).status).toBe(400)
+  })
+})
