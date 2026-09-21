@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { exportFeedbackUrl, fetchInbox, fetchMetrics, toggleResolve } from '../api'
+import { downloadExport, fetchInbox, fetchMetrics, toggleResolve } from '../api'
 import { FeedbackItem, Metrics } from '../types'
 import ItemDetail from './ItemDetail'
 
@@ -44,6 +44,16 @@ export default function Inbox({ token }: { token: string }) {
     const nextStatus = item.status === 'open' ? 'resolved' : 'open'
     setItems(items.map((it) => (it.id === item.id ? { ...it, status: nextStatus } : it)))
     await toggleResolve(item.id, token)
+  }
+
+  const onExport = async () => {
+    const blob = await downloadExport(filter, search, token)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'pulse-feedback-export.csv'
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
@@ -107,12 +117,7 @@ export default function Inbox({ token }: { token: string }) {
           }}
           placeholder="Search VIPs, refunds, chaos..."
         />
-        <button
-          className="export-button"
-          onClick={() => {
-            window.location.href = exportFeedbackUrl(filter, search, token)
-          }}
-        >
+        <button className="export-button" onClick={onExport}>
           Export CSV
         </button>
       </div>

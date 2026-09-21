@@ -1,4 +1,4 @@
-import { API_URL, LLM_API_KEY } from './config'
+import { API_URL } from './config'
 import { CustomerProfile, FeedbackItem, InternalNote, Metrics, User } from './types'
 
 export async function login(
@@ -57,8 +57,15 @@ export async function fetchMetrics(token: string): Promise<Metrics> {
   return res.json()
 }
 
-export function exportFeedbackUrl(status: string, search: string, token: string) {
-  return `${API_URL}/export.csv?status=${status}&q=${search}&token=${token}`
+export async function downloadExport(status: string, search: string, token: string): Promise<Blob> {
+  const params = new URLSearchParams({ status, q: search })
+  const res = await fetch(`${API_URL}/export.csv?${params}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) {
+    throw new Error('Export failed')
+  }
+  return res.blob()
 }
 
 export async function fetchCustomer(id: number, token: string): Promise<CustomerProfile> {
@@ -113,7 +120,6 @@ export async function summarize(id: number, token: string): Promise<{ summary: s
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
-      'x-llm-key': LLM_API_KEY,
     },
     body: JSON.stringify({ id }),
   })
