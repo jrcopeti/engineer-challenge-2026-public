@@ -18,6 +18,7 @@ export default function Inbox({ token }: { token: string }) {
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
   const allowStatusClick = useClickCooldown()
 
   // Search: wait for typing to pause, then fetch. Resets to page 1.
@@ -42,6 +43,8 @@ export default function Inbox({ token }: { token: string }) {
       } catch (err) {
         if (controller.signal.aborted) return
         setError(errorMessage(err))
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
       }
     }
     load()
@@ -112,19 +115,19 @@ export default function Inbox({ token }: { token: string }) {
     <div className="inbox">
       {metrics && (
         <div className="metrics-strip">
-          <div>
+          <div className="metric-open">
             <strong>{metrics.open}</strong>
             <span>Open</span>
           </div>
-          <div>
+          <div className="metric-resolved">
             <strong>{metrics.resolved}</strong>
             <span>Resolved</span>
           </div>
-          <div>
+          <div className="metric-urgent">
             <strong>{metrics.urgent}</strong>
             <span>Urgent</span>
           </div>
-          <div>
+          <div className="metric-overdue">
             <strong>{metrics.overdue}</strong>
             <span>Overdue</span>
           </div>
@@ -149,7 +152,8 @@ export default function Inbox({ token }: { token: string }) {
           className="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search VIPs, refunds, chaos..."
+          placeholder="Search feedback"
+          aria-label="Search feedback"
         />
         <button className="export-button" onClick={onExport}>
           Export CSV
@@ -158,53 +162,69 @@ export default function Inbox({ token }: { token: string }) {
 
       {error && <div className="error">{error}</div>}
 
-      <table className="feedback-table">
-        <thead>
-          <tr>
-            <th>Customer</th>
-            <th>Channel</th>
-            <th>Priority</th>
-            <th>Message</th>
-            <th>Owner</th>
-            <th>Status</th>
-            <th>Due</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <tr key={item.id} className="row" onClick={() => setSelectedId(item.id)}>
-              <td>{item.customer_name}</td>
-              <td>
-                <span className="channel">{item.channel}</span>
-              </td>
-              <td>
-                <span className={'priority ' + item.priority}>{item.priority}</span>
-              </td>
-              <td className="preview">
-                {item.message.slice(0, 70)}
-                {item.message.length > 70 ? '…' : ''}
-              </td>
-              <td>{item.assignee_name || 'Nobody'}</td>
-              <td>
-                <span className={'badge ' + item.status}>{item.status}</span>
-              </td>
-              <td>{item.due_at ? new Date(item.due_at).toLocaleDateString() : 'Someday'}</td>
-              <td>
-                <button
-                  className="link-button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onToggleStatus(item)
-                  }}
-                >
-                  {item.status === 'open' ? 'Resolve' : 'Reopen'}
-                </button>
-              </td>
+      <div className="table-wrap">
+        <table className="feedback-table">
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Channel</th>
+              <th>Priority</th>
+              <th>Message</th>
+              <th>Owner</th>
+              <th>Status</th>
+              <th>Due</th>
+              <th></th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {items.map((item) => (
+              <tr key={item.id} className="row" onClick={() => setSelectedId(item.id)}>
+                <td>{item.customer_name}</td>
+                <td>
+                  <span className="channel">{item.channel}</span>
+                </td>
+                <td>
+                  <span className={'pill priority ' + item.priority}>{item.priority}</span>
+                </td>
+                <td className="preview">
+                  {item.message.slice(0, 70)}
+                  {item.message.length > 70 ? '…' : ''}
+                </td>
+                <td>{item.assignee_name || <span className="muted">Unassigned</span>}</td>
+                <td>
+                  <span className={'pill badge ' + item.status}>{item.status}</span>
+                </td>
+                <td>
+                  {item.due_at ? (
+                    new Date(item.due_at).toLocaleDateString()
+                  ) : (
+                    <span className="muted">No due date</span>
+                  )}
+                </td>
+                <td>
+                  <button
+                    className="row-action"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onToggleStatus(item)
+                    }}
+                  >
+                    {item.status === 'open' ? 'Resolve' : 'Reopen'}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {!loading && items.length === 0 && !error && (
+        <div className="empty">
+          {debouncedSearch || filter !== 'all'
+            ? 'No feedback matches this search or filter.'
+            : 'No feedback yet.'}
+        </div>
+      )}
 
       <div className="pager">
         <button disabled={page <= 1} onClick={() => setPage(page - 1)}>
