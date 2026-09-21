@@ -179,3 +179,35 @@ merge nothing I can't explain in the interview. Questions asked in this window:
 ## 3. SQL injection + validation + schema — `fix/sql-injection-validation` (17:40–)
 
 **My prompt:** "it's all good. I merged PR#2 let's keep going."
+
+**Agent did (17:43–17:48, wall-clock; the review of this PR is where the time goes):**
+- Every query parameterised; shared `feedbackFilters()` builds the WHERE for list + export
+  from bound params. `LIKE` input escaped (`%`, `_`, `\`) with `ESCAPE '\'`.
+- `server/src/validation.ts` — zod 4 schemas for every body/query/param. Unknown enum
+  values, non-numeric ids, non-ISO dates → 400 with field-level details.
+- `server/src/schema.ts` — tables with FKs, CHECK constraints on status/priority, four
+  indexes; `PRAGMA foreign_keys = ON`; applied on boot with IF NOT EXISTS. Seed drops and
+  re-applies through the same module. **Deviation from plan:** a `.ts` string instead of
+  `schema.sql` so a future `tsc` build needs no copy step.
+- `serializeFeedback` N+1 (2 queries per row, 21 per page) → one JOIN, reused by list,
+  detail, customer history.
+- **Every `any` removed** from server code as instructed — `types.ts` holds the row types;
+  the one remaining `any` is in `llm.ts`, which phase 5 replaces.
+- Pulled forward from phase 6 because zod needs it: `errors.ts` with `HttpError`,
+  `asyncHandler` (Express 4 drops rejected promises), a central error handler (zod → 400,
+  malformed JSON → 400, unknown → 500 without leaking internals) and a JSON 404.
+- Fixed C1 (pagination `(page-1)*PAGE_SIZE` and filtered `COUNT`) here rather than phase 3
+  because the exact lines were being rewritten — splitting it would have been theatre.
+- Assignment now rejects unknown assignees (400) and unknown feedback (404) instead of
+  silently updating zero rows; notes refuse to attach to missing feedback.
+- 24 new tests (38 total): three injection payloads against status/search/assignment/
+  notes/metrics/export with row-count and per-row checks that nothing changed; `%` no
+  longer a wildcard; page 1 = newest; filtered totals; malformed JSON; JSON 404.
+
+**Verified by hand:** the reviewer's exact payload from PR #2
+(`priority: "x' WHERE 1=1 --"`) → 400, priorities still 20/20/20/20. Browser: login →
+detail → save routing (200) → add note (201) → summarize (200), DB matches.
+
+**Left for later:** `/resolve` still toggles (phase 3, commented in code); `due_at`
+normalisation to ISO (phase 3); `csvCell` formulas + private notes in export (phase 4);
+route split (phase 6).

@@ -1,53 +1,13 @@
 import type { Database } from 'better-sqlite3'
 import bcrypt from 'bcryptjs'
+import { applySchema, dropAllTables } from './schema'
 
 // Low cost factor on purpose: seed/test data only. Real signups would use 12.
 const SEED_BCRYPT_ROUNDS = 4
 
 export function seedDatabase(db: Database) {
-  db.exec(`
-  DROP TABLE IF EXISTS feedback_notes;
-  DROP TABLE IF EXISTS feedback;
-  DROP TABLE IF EXISTS customers;
-  DROP TABLE IF EXISTS users;
-
-  CREATE TABLE users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    name TEXT NOT NULL,
-    role TEXT NOT NULL
-  );
-
-  CREATE TABLE customers (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    email TEXT NOT NULL,
-    plan TEXT NOT NULL,
-    health_score INTEGER NOT NULL
-  );
-
-  CREATE TABLE feedback (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    customer_id INTEGER NOT NULL,
-    channel TEXT NOT NULL,
-    message TEXT NOT NULL,
-    status TEXT NOT NULL,
-    priority TEXT NOT NULL,
-    assignee_id INTEGER,
-    due_at TEXT,
-    created_at TEXT NOT NULL
-  );
-
-  CREATE TABLE feedback_notes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    feedback_id INTEGER NOT NULL,
-    author_id INTEGER NOT NULL,
-    body TEXT NOT NULL,
-    is_private INTEGER NOT NULL,
-    created_at TEXT NOT NULL
-  );
-`)
+  dropAllTables(db)
+  applySchema(db)
 
   const users = [
     { email: 'alice@pulse.test', password: 'password123', name: 'Alice Martin', role: 'agent' },
