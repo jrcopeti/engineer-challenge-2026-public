@@ -117,3 +117,65 @@ login rate limiting (KNOWN-ISSUES).
 3. *Did you test it?* Agent admitted it had only curl-tested the API, not the browser. I
    made it run the real UI via Playwright: login form → inbox, Export CSV → header-auth
    download of 80 rows. It passed, but the honest answer was "partly" until I asked.
+
+**At commit time:** the agent's first cut of commit 1 wasn't self-contained (`index.ts`
+imported an `app.ts` that only existed in commit 2). It caught this itself after staging,
+rebuilt commit 1 with an intermediate `app.ts` (original routes minus `listen`) and
+verified each commit typechecks alone. It also noticed an unrelated `App.tsx` reflow from
+my editor's format-on-save picking up the new `.prettierrc` and kept it out of the PR.
+
+**PR #2 automated review (first real run of the action, ~5 min):** posted a summary plus
+4 inline comments: SQLi in the assignment `UPDATE` (rated most severe — "a working
+injection into a write path"), pagination off-by-one, `csvCell` formula prefixes, and
+`any` on every DB row in `app.ts`. All four were already on the plan. One gap in the
+reviewer: git didn't detect the `index.ts → app.ts` rename, so it treated 300 lines of
+pre-existing `any` as new code.
+
+**What I told the agent to do (my decisions, not its suggestions):**
+1. Don't patch the assignment route inside PR #2 — merge as-is, but **explicitly state in
+   the PR** that each finding will be corrected in a named later phase. Agent posted a
+   triage table as a PR comment.
+2. **Remove every `any`, in new *and* existing code** — not now, but as part of phase 2.
+   Agent added it to the plan.
+3. Record in this trail that these were my explicit instructions.
+
+**Review gap (16:25–17:05) — reading the PR and questioning the agent, no code written.**
+The timestamps between PR #2 opening and phase 2 starting are me reviewing the diff line
+by line and asking the agent to justify decisions before I merge. That is deliberate: I
+merge nothing I can't explain in the interview. Questions asked in this window:
+
+- *When do `DECISIONS`, `KNOWN-ISSUES` and the product note get written?* — Phase 8, at
+  the end, because they summarise what was and wasn't done; the trail collects the raw
+  material per phase so they aren't written from memory.
+- *Why `const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10)`?* — Timing-based
+  user enumeration: without it, unknown-email logins return in ~1 ms while known-email /
+  wrong-password logins take a full bcrypt compare (~50–100 ms), so an attacker can tell
+  which emails have accounts. The dummy makes both paths do one compare. Computed once at
+  boot (not per request); cost 10 to match production hashes. Agent volunteered a caveat
+  I hadn't spotted: the seed uses cost 4, so with seeded data the timing still differs
+  until real users exist at cost 10 — optional phase-2 tweak.
+- *Why was the CSV export changed from `window.location.href = …?token=` to `fetch` + blob?*
+  — A navigation can't send headers, and a JWT in the URL lands in browser history, server
+  and proxy logs, and pasted links. Server now only accepts the `Authorization` header, so
+  the client fetches the body and triggers the download from an object URL. Also: `res.ok`
+  is checked (a 401 no longer replaces the app with a JSON page) and `URLSearchParams`
+  encodes the search term. Trade-off noted for KNOWN-ISSUES: the file is buffered in
+  memory; very large exports would want a single-use download token instead.
+- *I ran the app and checked DevTools: the password is visible in the `POST /login`
+  payload — is that OK?* — Yes and unavoidable: the server needs the password to compare
+  against the hash; DevTools shows your own browser's traffic pre-encryption. What
+  changed is everywhere *else*: no token in URLs, no `req.body` in error logs, no
+  plaintext in the DB or in `/users`. On the wire the body is protected by TLS, which is a
+  deployment requirement → KNOWN-ISSUES ("must be served over HTTPS"). Client-side hashing
+  wouldn't help (the hash becomes the password). Longer-term: SSO so Pulse never handles
+  passwords — candidate for the product note.
+- Side effect caught while testing: login failed on my machine because the agent had
+  switched the working tree back to `shippable` (old login code) after opening the PR,
+  while the local DB had already been reseeded with the new `password_hash` column.
+  Checkout and DB from different commits — not an app bug. Fix: check out the PR branch.
+
+---
+
+## 3. SQL injection + validation + schema — `fix/sql-injection-validation` (17:40–)
+
+**My prompt:** "it's all good. I merged PR#2 let's keep going."
