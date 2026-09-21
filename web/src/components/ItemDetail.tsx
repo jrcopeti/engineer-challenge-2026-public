@@ -17,10 +17,12 @@ export default function ItemDetail({
   id,
   token,
   onBack,
+  onSelect,
 }: {
   id: number
   token: string
   onBack: () => void
+  onSelect: (id: number) => void
 }) {
   const [item, setItem] = useState<FeedbackItem | null>(null)
   const [users, setUsers] = useState<User[]>([])
@@ -126,6 +128,8 @@ export default function ItemDetail({
     }
   }
 
+  const otherHistory = customer?.history.filter((historyItem) => historyItem.id !== id) ?? []
+
   if (!item) {
     return (
       <div className="detail">
@@ -217,12 +221,19 @@ export default function ItemDetail({
               </div>
               <h4>Recent history</h4>
               <ul className="history-list">
-                {customer.history.map((historyItem) => (
+                {otherHistory.map((historyItem) => (
                   <li key={historyItem.id}>
-                    <span className={'pill badge ' + historyItem.status}>{historyItem.status}</span>
-                    <span>{historyItem.message}</span>
+                    <button className="history-link" onClick={() => onSelect(historyItem.id)}>
+                      <span className={'pill badge ' + historyItem.status}>
+                        {historyItem.status}
+                      </span>
+                      <span>{historyItem.message}</span>
+                    </button>
                   </li>
                 ))}
+                {otherHistory.length === 0 && (
+                  <li className="muted">No other feedback from this customer.</li>
+                )}
               </ul>
             </section>
           )}

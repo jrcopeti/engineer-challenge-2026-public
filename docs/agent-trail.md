@@ -494,3 +494,24 @@ to the item.* — Real: `GET /customers/:id` returns the customer's 8 latest fee
 from the DB. Looks fake because the seed hands out messages round-robin, so a customer
 repeats the same text with different statuses. Not clickable and includes the item
 you're on — a genuine gap, left for KNOWN-ISSUES at my request.
+
+---
+
+## 9. Clickable history — `feat/clickable-history` (21:14–21:18)
+
+**My prompt:** "#11 merged, before starting phase 8 let's make the recent history in the
+item detail clickable. it should be simple." — Pulled forward from KNOWN-ISSUES because
+it was cheap. `ItemDetail` gets an `onSelect(id)` prop wired to `Inbox`'s `setSelectedId`;
+history rows are `<button>`s (keyboard-reachable); the item you're on is filtered out of
+its own history, with an empty message when nothing else exists. Verified in the browser:
+click swaps the detail in place; back still returns to the table. 4 lines of logic.
+
+**PR #12 review found a real bug I'd missed and the agent's browser check hadn't
+covered:** navigating via history changes the `id` prop without unmounting `ItemDetail`,
+so `summary`, the note draft and `error` carried over from the previous item — a stale
+AI summary under the wrong customer, or a draft note submitted against the wrong item.
+The agent's verification had only checked that the title and message changed. Fix:
+`key={selectedId}` on `<ItemDetail>` so React remounts per item and *all* local state
+resets, rather than listing fields to clear in `load()` and missing one later. Verified
+with the reviewer's exact repro using a real Anthropic summary. Also hoisted the
+duplicated history filter the reviewer flagged.
