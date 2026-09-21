@@ -37,7 +37,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <div className="marquee">
+      <div className="marquee" aria-hidden="true">
         <span className="marquee-text">
           🚀🔥 WELCOME 2 PULSE™ — THE #1 FEEDBACK INBOX ON THE INFORMATION SUPERHIGHWAY!!! 🔥🚀 ⭐
           best viewed in Netscape Navigator @ 800×600 ⭐ don't forget to sign our guestbook!!!
@@ -53,7 +53,9 @@ export default function App() {
           </button>
         </div>
       </header>
-      <Inbox token={token} />
+      <main className="page">
+        <Inbox token={token} />
+      </main>
     </div>
   )
 }

@@ -40,7 +40,13 @@ export default function ItemDetail({
     let cancelled = false
 
     async function load() {
-      const data = await fetchItem(id, token)
+      let data: FeedbackItem
+      try {
+        data = await fetchItem(id, token)
+      } catch (err) {
+        if (!cancelled) setError(errorMessage(err))
+        return
+      }
       if (cancelled) return
 
       setItem(data)
@@ -123,16 +129,17 @@ export default function ItemDetail({
   if (!item) {
     return (
       <div className="detail">
-        <button className="link-button" onClick={onBack}>
+        <button className="link-button back" onClick={onBack}>
           ← Back to inbox
         </button>
+        {error ? <div className="error">{error}</div> : <div className="muted">Loading…</div>}
       </div>
     )
   }
 
   return (
     <div className="detail">
-      <button className="link-button" onClick={onBack}>
+      <button className="link-button back" onClick={onBack}>
         ← Back to inbox
       </button>
       <div className="detail-grid">
@@ -142,11 +149,11 @@ export default function ItemDetail({
               <h2>{item.customer_name}</h2>
               <div className="muted">{item.customer_email}</div>
             </div>
-            <span className={'badge ' + item.status}>{item.status}</span>
+            <span className={'pill badge ' + item.status}>{item.status}</span>
           </div>
           <div className="detail-meta">
             <span className="channel">{item.channel}</span>
-            <span className={'priority ' + item.priority}>{item.priority}</span>
+            <span className={'pill priority ' + item.priority}>{item.priority}</span>
             <span className="muted">{new Date(item.created_at).toLocaleString()}</span>
           </div>
           {/* Customer text is untrusted: render as text, keep line breaks. */}
@@ -155,7 +162,7 @@ export default function ItemDetail({
             <label>
               Owner
               <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
-                <option value="">Nobody</option>
+                <option value="">Unassigned</option>
                 {users.map((user) => (
                   <option key={user.id} value={user.id}>
                     {user.name} ({user.role})
@@ -177,10 +184,10 @@ export default function ItemDetail({
               Due
               <input type="date" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
             </label>
-            <button onClick={onSaveAssignment}>Save routing</button>
+            <button onClick={onSaveAssignment}>Save</button>
           </div>
           <div className="detail-actions">
-            <button onClick={onToggleStatus}>
+            <button className="primary" onClick={onToggleStatus}>
               {item.status === 'open' ? 'Mark resolved' : 'Reopen'}
             </button>
             <button className="secondary" onClick={onSummarize} disabled={summarizing}>
@@ -199,7 +206,7 @@ export default function ItemDetail({
         <aside className="side-panels">
           {customer && (
             <section className="mini-panel customer-panel">
-              <h3>Customer Profile</h3>
+              <h3>Customer profile</h3>
               <div className="profile-row">
                 <span>Plan</span>
                 <strong>{customer.plan}</strong>
@@ -212,8 +219,8 @@ export default function ItemDetail({
               <ul className="history-list">
                 {customer.history.map((historyItem) => (
                   <li key={historyItem.id}>
-                    <span className={'badge ' + historyItem.status}>{historyItem.status}</span>
-                    <span>{historyItem.message.slice(0, 48)}</span>
+                    <span className={'pill badge ' + historyItem.status}>{historyItem.status}</span>
+                    <span>{historyItem.message}</span>
                   </li>
                 ))}
               </ul>
@@ -221,11 +228,12 @@ export default function ItemDetail({
           )}
 
           <section className="mini-panel notes-panel">
-            <h3>Internal Notes</h3>
+            <h3>Internal notes</h3>
             <textarea
               value={noteBody}
               onChange={(e) => setNoteBody(e.target.value)}
-              placeholder="Paste context, snippets, reminders..."
+              placeholder="Add a note for the team"
+              aria-label="New note"
             />
             <label className="checkbox-row">
               <input
@@ -237,6 +245,7 @@ export default function ItemDetail({
             </label>
             <button onClick={onAddNote}>Add note</button>
             <div className="notes-list">
+              {notes.length === 0 && <div className="muted">No notes yet.</div>}
               {notes.map((note) => (
                 <article key={note.id} className="note">
                   <div className="note-meta">

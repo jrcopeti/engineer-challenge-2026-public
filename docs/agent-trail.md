@@ -440,3 +440,57 @@ limit → 413. Also why the order matters: headers first so error responses carr
 
 **My prompt:** "#10 merged, start phase 7 - clean neutral design like Linear/notion."
 Design reference given by me, as agreed: clean, neutral, Linear/Notion-like.
+
+**Agent did (20:45–20:50, inside the 45-min box):**
+- Loaded the `frontend-design` skill, wrote a 4-line plan (palette, type, layout,
+  principles) and checked it against the generic tells before coding. Brief was explicit
+  — Linear/Notion — so restraint is the design: white page, hairlines instead of shadows,
+  one indigo accent used only for primary/focus/summary, system font stack (no external
+  font requests), pale tinted pills for status/priority, sentence case, 14/13 px.
+- `styles.css` rewritten from scratch (725 → ~540 lines, tokens at the top). Removed the
+  marquee, emoji heading, joke subtitle and placeholders. Copy now says what things are:
+  "Unassigned", "No due date", "Search feedback", "Add a note for the team", "Save".
+- States that didn't exist: loading and empty in the inbox (different text when a
+  filter/search is active), loading + error in the detail view, "No notes yet", login
+  shows the server's message and disables while submitting, `autocomplete` on the login
+  inputs, visible keyboard focus, reduced-motion respected, table scrolls inside its own
+  wrapper on phones so the page never scrolls sideways.
+
+**Mirror check (screenshots at 1280 and 400):** three things fixed after looking:
+"Add note" stretched full width; history rows clipped mid-word — turned out to be a
+hard `.slice(0, 48)` in the JSX, not CSS, so the ellipsis had nothing to do; then two
+levels of `min-width: 0` for grid/flex children so the ellipsis actually applies.
+Title-case headings → sentence case.
+
+**Verified in the browser:** inbox, detail, login (wrong password shows the error),
+phone width with no horizontal page scroll.
+
+**Left alone:** dark mode, a proper icon set, keyboard shortcuts — KNOWN-ISSUES.
+
+**I overruled the agent (20:55):** it had stripped every trace of personality — marquee,
+emojis, the "#1 inbox of ALL TIME" subtitle. I wanted them back: the product is an
+internal tool for a support team and a bit of fun is part of its character. Also the
+table's Resolve/Reopen were text links that didn't read as buttons. Agent restored the
+marquee (right → left, 28 s pass, static under reduced-motion), the 💖 heading and login
+subtitle, and gave the row actions a real bordered button style. It verified the
+animation direction by measuring the element's x over 1.5 s rather than trusting the CSS.
+Its first scripted edit of the button class silently missed again (prettier reflow);
+fixed by hand after checking the count came back 0.
+
+**Second round of my feedback (21:00):** low and normal priority were the same grey;
+the four metric numbers were all black. Asked for differentiation and for the metrics to
+be colour-coded so an agent can read the strip without reading it. Agent reused the pill
+colours (open blue, resolved green, urgent red, overdue amber) on the numbers so the
+colour language is one system, and gave `normal` a slate tint distinct from `low`'s faint
+outline.
+
+**Third round (21:03):** liked the colours, wanted them as the tile background with white
+text — a stronger signal than a coloured number. Done; the four tiles are the one loud
+element on the page now, which is the "spend your boldness in one place" rule applied
+where the user actually looks first.
+
+**Question (21:08):** *is the recent history in the detail real or fake? There's no link
+to the item.* — Real: `GET /customers/:id` returns the customer's 8 latest feedback rows
+from the DB. Looks fake because the seed hands out messages round-robin, so a customer
+repeats the same text with different statuses. Not clickable and includes the item
+you're on — a genuine gap, left for KNOWN-ISSUES at my request.
