@@ -22,4 +22,11 @@ describe('app plumbing', () => {
     const other = await request(app).get('/health').set('Origin', 'https://evil.example')
     expect(other.headers['access-control-allow-origin']).toBeUndefined()
   })
+
+  it('never echoes a wildcard origin', async () => {
+    // The cors package does not treat '*' inside an array as a wildcard, and we rely on
+    // that: CORS_ORIGIN=* must fail closed, not open the API to every site.
+    const res = await request(app).get('/health').set('Origin', '*')
+    expect(res.headers['access-control-allow-origin']).toBeUndefined()
+  })
 })

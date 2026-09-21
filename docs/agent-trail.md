@@ -421,3 +421,10 @@ typecheck + 57 tests already gate CI; two-workspace ESLint config is 20+ min).
 **Left alone on purpose:** ESLint (agreed), request logging / request ids (would want
 `pino` — KNOWN-ISSUES), graceful shutdown (SQLite is synchronous; closing the process is
 safe).
+
+**PR #10 review (posted, 3 min):** the lift was confirmed byte-for-byte for SQL, CSV,
+bcrypt and auth. One real finding: my config comment claimed `CORS_ORIGIN=*` opens the
+API; the `cors` package ignores `'*'` inside an array, so it fails closed. Reproduced
+with curl. Decision: **not** adding wildcard support — customer data, never open CORS —
+fixed the comment and pinned the closed behaviour with a test. The reviewer also noted
+that a test for this case would have caught the wrong comment; fair.
