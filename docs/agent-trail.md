@@ -333,3 +333,20 @@ cause: it returned the review as a message instead of calling `gh pr comment`. F
 PR #5's prompt (the official example's "only post GitHub comments" line); job re-run on
 #6. Third distinct way a green check meant nothing (skip on PR #1, skip on PR #4, silent
 no-post here). Lesson: the check mark is not the review — read the log or the comment.
+
+**PR #6 review: silent twice** (rerun too: 14 turns, 3 denials, no comment). I merged on
+my own review. Agent's mistake in the middle: it pushed the "post, don't return" prompt
+fix to PR #5's branch *after* #5 had merged and told me it was in — it wasn't. I asked
+how that could be; it checked, admitted it, cherry-picked onto a fresh branch (PR #7),
+deleted the orphan. Lesson: check PR state before pushing to its branch.
+
+I clarified my actual requirement: review on open, not on push — already delivered by
+#5. Declined the extra `show_full_output` debug switch; leaving the hidden-output
+problem for KNOWN-ISSUES unless it recurs.
+
+---
+
+## 6. Anthropic summarizer — `feat/anthropic-summarizer` (19:57–)
+
+**My prompt:** "I merged PR #6 … I just need the CI to trigger the review when Open the
+PR and not rerun when push changes" → confirmed already done; proceed to phase 5.
