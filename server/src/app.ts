@@ -1,8 +1,8 @@
 import express, { Request, Response } from 'express'
 import cors from 'cors'
-import jwt from 'jsonwebtoken'
+import bcrypt from 'bcryptjs'
 import { db } from './db'
-import { JWT_SECRET, authenticate } from './auth'
+import { AuthenticatedRequest, authenticate, signToken } from './auth'
 import { summarizeText } from './llm'
 
 export const app = express()
@@ -10,6 +10,7 @@ app.use(cors())
 app.use(express.json())
 
 const PAGE_SIZE = 10
+const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10)
 
 function serializeFeedback(row: any) {
   const customer: any = db.prepare('SELECT * FROM customers WHERE id = ?').get(row.customer_id)
@@ -33,44 +34,32 @@ function serializeFeedback(row: any) {
   }
 }
 
-function getExportUser(req: Request, res: Response) {
-  const header = req.headers.authorization || ''
-  const tokenFromHeader = header.startsWith('Bearer ') ? header.slice(7) : header
-  const token = tokenFromHeader || (req.query.token as string)
-
-  if (!token) {
-    res.status(401).json({ error: 'Missing token' })
-    return null
-  }
-
-  const payload = jwt.decode(token)
-  if (!payload) {
-    res.status(401).json({ error: 'Invalid token' })
-    return null
-  }
-
-  return payload
-}
-
 function csvCell(value: unknown) {
   return `"${String(value ?? '').replace(/"/g, '""')}"`
 }
 
-app.post('/login', (req: Request, res: Response) => {
-  const { email, password } = req.body
-  const user: any = db.prepare('SELECT * FROM users WHERE email = ?').get(email)
+type UserRow = { id: number; email: string; password_hash: string; name: string; role: string }
 
-  if (!user || user.password !== password) {
+app.post('/login', async (req: Request, res: Response) => {
+  const { email, password } = req.body ?? {}
+  if (typeof email !== 'string' || typeof password !== 'string') {
+    return res.status(400).json({ error: 'Email and password are required' })
+  }
+
+  const user = db
+    .prepare('SELECT id, email, password_hash, name, role FROM users WHERE email = ?')
+    .get(email.trim().toLowerCase()) as UserRow | undefined
+
+  // Compare against a dummy hash when the user is unknown so response time
+  // does not reveal whether the email exists.
+  const hash = user?.password_hash ?? DUMMY_HASH
+  const ok = await bcrypt.compare(password, hash)
+  if (!user || !ok) {
     return res.status(401).json({ error: 'Invalid email or password' })
   }
 
-  const token = jwt.sign(
-    { id: user.id, email: user.email, name: user.name, role: user.role },
-    JWT_SECRET,
-    { expiresIn: '7d' }
-  )
-
-  res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } })
+  const publicUser = { id: user.id, email: user.email, name: user.name, role: user.role }
+  res.json({ token: signToken(publicUser), user: publicUser })
 })
 
 app.get('/feedback', authenticate, (req: Request, res: Response) => {
@@ -102,13 +91,13 @@ app.get('/feedback', authenticate, (req: Request, res: Response) => {
     const total: any = db.prepare('SELECT COUNT(*) as count FROM feedback').get()
     res.json({ items, total: total.count, page })
   } catch (err) {
-    console.error(req.headers.authorization, err)
+    console.error(err)
     res.status(500).json({ error: 'Something went wrong' })
   }
 })
 
 app.get('/users', authenticate, (req: Request, res: Response) => {
-  const users = db.prepare('SELECT * FROM users ORDER BY name').all()
+  const users = db.prepare('SELECT id, email, name, role FROM users ORDER BY name').all()
   res.json({ users })
 })
 
@@ -121,7 +110,9 @@ app.get('/metrics', authenticate, (req: Request, res: Response) => {
     )
     .all()
   const urgent: any = db
-    .prepare(`SELECT COUNT(*) as count FROM feedback WHERE priority = 'urgent' AND created_at >= '${from}'`)
+    .prepare(
+      `SELECT COUNT(*) as count FROM feedback WHERE priority = 'urgent' AND created_at >= '${from}'`
+    )
     .get()
   const overdue: any = db
     .prepare(
@@ -137,10 +128,7 @@ app.get('/metrics', authenticate, (req: Request, res: Response) => {
   })
 })
 
-app.get('/export.csv', (req: Request, res: Response) => {
-  const user = getExportUser(req, res)
-  if (!user) return
-
+app.get('/export.csv', authenticate, (req: Request, res: Response) => {
   const status = (req.query.status as string) || 'all'
   const search = ((req.query.q as string) || '').trim()
   const filters = []
@@ -148,7 +136,9 @@ app.get('/export.csv', (req: Request, res: Response) => {
     filters.push(`f.status = '${status}'`)
   }
   if (search) {
-    filters.push(`(f.message LIKE '%${search}%' OR c.name LIKE '%${search}%' OR c.email LIKE '%${search}%')`)
+    filters.push(
+      `(f.message LIKE '%${search}%' OR c.name LIKE '%${search}%' OR c.email LIKE '%${search}%')`
+    )
   }
   const where = filters.length ? `WHERE ${filters.join(' AND ')}` : ''
 
@@ -246,7 +236,7 @@ app.post('/feedback/:id/assignment', authenticate, (req: Request, res: Response)
 
     res.json(serializeFeedback(row))
   } catch (err) {
-    console.error(req.body, err)
+    console.error(err)
     res.status(500).json({ error: 'Something went wrong' })
   }
 })
@@ -266,7 +256,7 @@ app.get('/feedback/:id/notes', authenticate, (req: Request, res: Response) => {
 
 app.post('/feedback/:id/notes', authenticate, (req: Request, res: Response) => {
   try {
-    const user = (req as any).user
+    const user = (req as AuthenticatedRequest).user
     const createdAt = new Date().toISOString()
     db.prepare(
       'INSERT INTO feedback_notes (feedback_id, author_id, body, is_private, created_at) VALUES (?, ?, ?, ?, ?)'

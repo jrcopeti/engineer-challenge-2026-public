@@ -77,3 +77,43 @@ showed `Skipping action due to workflow validation: the workflow file must exist
 repository's default branch`. The action never ran; the green check was meaningless.
 Fix: make `shippable` the fork's default branch (keeps `master` untouched) so the workflow
 is live from PR #2. CI (typecheck + build) genuinely passed.
+
+---
+
+## 2. Auth hardening — `fix/auth-verify-and-hashing` (16:06–16:20)
+
+**My prompt:** "PR #1 merged, start phase 1."
+
+**Agent did:**
+- `jwt.decode` → `jwt.verify` with a typed payload guard; secret from env, boot fails fast
+  on the placeholder or anything under 32 chars (`server/src/config.ts`).
+- Passwords: bcryptjs, column renamed to `password_hash`; login compares against a dummy
+  hash for unknown emails so timing doesn't leak whether an account exists.
+- `GET /users` selects explicit columns; `password?` removed from the web `User` type.
+- `/export.csv` uses the same `authenticate` middleware; `?token=` no longer accepted.
+  Frontend downloads via `fetch` + blob with the `Authorization` header.
+- Removed `VITE_OPENAI_API_KEY` / `x-llm-key` (LLM key was being shipped to the browser).
+- Stopped logging the `Authorization` header and request bodies on errors.
+- Pulled the test harness forward from phase 2 because CLAUDE.md says routes ship with
+  tests: `app.ts` exported without `listen`, `DB_PATH=:memory:` for tests, seed turned into
+  `seedDatabase(db)`. 14 tests: forged/unsigned/tampered tokens, wrong password, `/users`
+  shape, export auth.
+- Added `.prettierrc` after prettier 3's default trailing commas polluted the diff.
+
+**Verified by hand:** curl login OK / wrong password 401 / forged token 401 / `?token=`
+export 401 / header export 200; boot with placeholder secret throws.
+
+**Left for later phases (on purpose):** SQL interpolation in the same file (phase 2),
+login rate limiting (KNOWN-ISSUES).
+
+**My questions before commit, and the answers I got:**
+1. *Why 32 chars for `JWT_SECRET`?* HS256 is only as strong as the secret's entropy; one
+   valid token lets an attacker brute-force a short secret offline and mint tokens for
+   anyone. RFC 7518 recommends ≥ 256 bits. The check is a floor to reject `secret`-style
+   values, not a guarantee.
+2. *Why `.prettierrc`?* Prettier 3 defaults added trailing commas to untouched lines; the
+   file pins the repo's existing style so diffs stay clean. Optional; prettier itself
+   still needs adding as a devDependency with ESLint.
+3. *Did you test it?* Agent admitted it had only curl-tested the API, not the browser. I
+   made it run the real UI via Playwright: login form → inbox, Export CSV → header-auth
+   download of 80 rows. It passed, but the honest answer was "partly" until I asked.

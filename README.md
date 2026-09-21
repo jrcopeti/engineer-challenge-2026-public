@@ -29,6 +29,13 @@ customer profile history, internal notes, a small metrics panel, search, and CSV
    cp web/.env.example web/.env
    ```
 
+   Then set `JWT_SECRET` in `server/.env` to a random string (the server refuses to start
+   with the placeholder):
+
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
+   ```
+
    The defaults run the app fully offline — the Summarize feature uses a built-in canned
    summarizer (`FAKE_LLM=true`), so no API key is required.
 
@@ -37,6 +44,8 @@ customer profile history, internal notes, a small metrics panel, search, and CSV
    ```bash
    npm run seed
    ```
+
+   Re-run this after pulling changes that touch the schema; it drops and recreates every table.
 
 4. Start the API and the web app together:
 
@@ -48,6 +57,13 @@ customer profile history, internal notes, a small metrics panel, search, and CSV
    - Web: http://localhost:5173
 
 Open the web app in your browser and sign in.
+
+## Tests
+
+```bash
+npm test             # API tests (vitest + supertest against an in-memory SQLite)
+npm run typecheck    # both workspaces
+```
 
 ## Test login
 
