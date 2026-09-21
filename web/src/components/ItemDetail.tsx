@@ -11,6 +11,7 @@ import {
   updateAssignment,
 } from '../api'
 import { CustomerProfile, FeedbackItem, InternalNote, User } from '../types'
+import { useClickCooldown } from '../hooks/useClickCooldown'
 
 export default function ItemDetail({
   id,
@@ -33,7 +34,7 @@ export default function ItemDetail({
   const [privateNote, setPrivateNote] = useState(true)
   const [error, setError] = useState('')
   const [summarizing, setSummarizing] = useState(false)
-  const [savingStatus, setSavingStatus] = useState(false)
+  const allowStatusClick = useClickCooldown()
 
   useEffect(() => {
     let cancelled = false
@@ -66,15 +67,12 @@ export default function ItemDetail({
   }, [id, token])
 
   const onToggleStatus = async () => {
-    if (!item || savingStatus) return
-    setSavingStatus(true)
+    if (!item || !allowStatusClick(item.id)) return
     try {
       setItem(await setStatus(item.id, item.status === 'open' ? 'resolved' : 'open', token))
       setError('')
     } catch (err) {
       setError(errorMessage(err))
-    } finally {
-      setSavingStatus(false)
     }
   }
 
@@ -181,7 +179,7 @@ export default function ItemDetail({
             <button onClick={onSaveAssignment}>Save routing</button>
           </div>
           <div className="detail-actions">
-            <button onClick={onToggleStatus} disabled={savingStatus}>
+            <button onClick={onToggleStatus}>
               {item.status === 'open' ? 'Mark resolved' : 'Reopen'}
             </button>
             <button className="secondary" onClick={onSummarize} disabled={summarizing}>

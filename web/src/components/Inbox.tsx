@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { downloadExport, errorMessage, fetchInbox, fetchMetrics, setStatus } from '../api'
 import { FeedbackItem, Metrics } from '../types'
 import ItemDetail from './ItemDetail'
+import { useClickCooldown } from '../hooks/useClickCooldown'
 
 const PAGE_SIZE = 10
 const SEARCH_DEBOUNCE_MS = 300
 const POLL_INTERVAL_MS = 45000
-const STATUS_COOLDOWN_MS = 500
 
 export default function Inbox({ token }: { token: string }) {
   const [items, setItems] = useState<FeedbackItem[]>([])
@@ -18,12 +18,7 @@ export default function Inbox({ token }: { token: string }) {
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [error, setError] = useState('')
-  // A double-click must not resolve then immediately reopen. Ignore a second click on the
-  // same item within a short cooldown of the last one. A cooldown rather than an
-  // in-flight flag: on a fast network the first request finishes between the two clicks,
-  // so "in flight" would not catch it. After the cooldown the label has already flipped,
-  // so a further click is a deliberate action.
-  const lastToggle = useRef(new Map<number, number>())
+  const allowStatusClick = useClickCooldown()
 
   // Search: wait for typing to pause, then fetch. Resets to page 1.
   useEffect(() => {
@@ -68,9 +63,7 @@ export default function Inbox({ token }: { token: string }) {
   }, [loadMetrics])
 
   const onToggleStatus = async (item: FeedbackItem) => {
-    const now = Date.now()
-    if (now - (lastToggle.current.get(item.id) ?? 0) < STATUS_COOLDOWN_MS) return
-    lastToggle.current.set(item.id, now)
+    if (!allowStatusClick(item.id)) return
     const nextStatus = item.status === 'open' ? 'resolved' : 'open'
     // Optimistic update, rolled back if the server disagrees.
     setItems((current) =>

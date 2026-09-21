@@ -295,3 +295,9 @@ and raised three nits: the double-click comment claimed an in-flight guard that 
 there, `errorMessage()` duplicated in two components, `downloadExport` bypasses
 `request()` without saying why. I chose to apply all three on the open PR rather than
 carry them forward.
+
+**I caught this one:** the double-click guard was only in the table; `ItemDetail` still
+used the in-flight flag the agent had itself explained doesn't work on a fast network.
+Reproduced with two clicks 120 ms apart in the detail view → `open` then `resolved`.
+Fix: one shared `useClickCooldown` hook (`web/src/hooks/`) used by both components,
+instead of a second copy of the pattern. Verified: one request, state stays.
