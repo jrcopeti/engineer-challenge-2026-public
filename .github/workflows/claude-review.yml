@@ -38,7 +38,8 @@ jobs:
             If there is nothing important, say so in one line — do not invent findings.
 
             Post one top-level summary with `gh pr comment`. Use inline comments only for
-            concrete, line-anchored issues.
+            concrete, line-anchored issues. Only post GitHub comments — do not return the
+            review as a message; a review that is not posted is lost.
 
           claude_args: |
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
