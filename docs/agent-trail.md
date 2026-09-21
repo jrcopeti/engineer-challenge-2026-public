@@ -390,3 +390,16 @@ landed. #6's rerun and #8's first run both posted. PRs #5, #7 and #9 (trigger ch
 prompt line, revert) were therefore churn on bad evidence — I asked for #9 to restore the
 original, which is where we ended up anyway. The agent owned this without being asked
 once the #8 comment appeared. The lesson it had logged three times applied to itself.
+
+**Also (20:40):** the agent committed the correction above directly onto local
+`shippable` by mistake (not pushed), noticed, moved it to the phase-6 branch and reset
+local `shippable` to origin. Then hit a rebase conflict in this file when #8 merged and
+resolved it by keeping both blocks.
+
+---
+
+## 7. Server structure + ops — `refactor/server-structure` (20:40–)
+
+**My prompt:** "#8 merged, start phase 6." Scope agreed beforehand: route split, helmet,
+CORS origin from env, `/health`, production build/start. **ESLint skipped** (my call —
+typecheck + 57 tests already gate CI; two-workspace ESLint config is 20+ min).
