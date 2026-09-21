@@ -128,6 +128,8 @@ export default function ItemDetail({
     }
   }
 
+  const otherHistory = customer?.history.filter((historyItem) => historyItem.id !== id) ?? []
+
   if (!item) {
     return (
       <div className="detail">
@@ -219,19 +221,17 @@ export default function ItemDetail({
               </div>
               <h4>Recent history</h4>
               <ul className="history-list">
-                {customer.history
-                  .filter((historyItem) => historyItem.id !== id)
-                  .map((historyItem) => (
-                    <li key={historyItem.id}>
-                      <button className="history-link" onClick={() => onSelect(historyItem.id)}>
-                        <span className={'pill badge ' + historyItem.status}>
-                          {historyItem.status}
-                        </span>
-                        <span>{historyItem.message}</span>
-                      </button>
-                    </li>
-                  ))}
-                {customer.history.filter((historyItem) => historyItem.id !== id).length === 0 && (
+                {otherHistory.map((historyItem) => (
+                  <li key={historyItem.id}>
+                    <button className="history-link" onClick={() => onSelect(historyItem.id)}>
+                      <span className={'pill badge ' + historyItem.status}>
+                        {historyItem.status}
+                      </span>
+                      <span>{historyItem.message}</span>
+                    </button>
+                  </li>
+                ))}
+                {otherHistory.length === 0 && (
                   <li className="muted">No other feedback from this customer.</li>
                 )}
               </ul>

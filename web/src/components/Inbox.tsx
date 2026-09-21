@@ -100,7 +100,10 @@ export default function Inbox({ token }: { token: string }) {
 
   if (selectedId !== null) {
     return (
+      // Keyed on the id so navigating between items (via customer history) remounts the
+      // view: summary, note draft and error state must never carry over to another item.
       <ItemDetail
+        key={selectedId}
         id={selectedId}
         token={token}
         onBack={() => {
