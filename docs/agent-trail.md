@@ -428,3 +428,15 @@ API; the `cors` package ignores `'*'` inside an array, so it fails closed. Repro
 with curl. Decision: **not** adding wildcard support — customer data, never open CORS —
 fixed the comment and pinned the closed behaviour with a test. The reviewer also noted
 that a test for this case would have caught the wrong comment; fair.
+
+**Question after review:** *what do these four middleware lines do?* — explained
+`x-powered-by`, helmet's headers (nosniff, frame-options, HSTS, CSP), why `cors()` with
+no options meant any site could call the API from a logged-in browser, and the JSON body
+limit → 413. Also why the order matters: headers first so error responses carry them too.
+
+---
+
+## 8. UI — `feat/ui-redesign` (20:55–)
+
+**My prompt:** "#10 merged, start phase 7 - clean neutral design like Linear/notion."
+Design reference given by me, as agreed: clean, neutral, Linear/Notion-like.
