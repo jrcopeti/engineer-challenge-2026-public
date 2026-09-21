@@ -286,4 +286,5 @@ loses the stack and still needs a discriminator; a bare `Error` can't be told ap
 **PR #4 review job: skipped, not passed.** The PR edits `claude-review.yml`, and the
 action refuses to run unless the workflow file matches the default branch — same silent
 green as PR #1. Caught by checking the run log rather than trusting the check mark. CI
-itself is real. Decision: merge on my own review; the new trigger applies from PR #5.
+itself is real. I told the agent to fix it: the trigger change is pulled out of this PR
+into its own (which by the same rule can't be reviewed either), so #4 gets a real review.
