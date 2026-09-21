@@ -114,12 +114,22 @@ describe('POST /feedback/:id/assignment', () => {
       assignee_id: 2,
       assignee_name: 'Ben Carter',
       priority: 'urgent',
-      due_at: '2026-12-31',
     })
+    // A date from the picker is stored as ISO UTC at the end of that day.
+    expect(res.body.due_at).toBe('2026-12-31T23:59:59.999Z')
     const other = db.prepare('SELECT priority FROM feedback WHERE id = 2').get() as {
       priority: string
     }
     expect(other.priority).not.toBe('urgent')
+  })
+
+  it('keeps a full ISO due date as given', async () => {
+    const res = await request(app)
+      .post('/feedback/1/assignment')
+      .set(bearer())
+      .send({ assignee_id: null, priority: 'low', due_at: '2026-12-31T09:30:00.000Z' })
+    expect(res.status).toBe(200)
+    expect(res.body.due_at).toBe('2026-12-31T09:30:00.000Z')
   })
 
   it('stores an empty due date as NULL and allows unassigning', async () => {
@@ -184,6 +194,23 @@ describe('GET /metrics', () => {
     expect(res.status).toBe(400)
   })
 
+  it('honours the date window for every count', async () => {
+    const res = await request(app)
+      .get('/metrics')
+      .query({ from: '2000-01-01T00:00:00.000Z', to: '2000-01-02T00:00:00.000Z' })
+      .set(bearer())
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ open: 0, resolved: 0, urgent: 0 })
+  })
+
+  it('counts an open item whose due date has passed as overdue', async () => {
+    db.prepare(
+      "UPDATE feedback SET status = 'open', due_at = '2000-01-01T23:59:59.999Z' WHERE id = 1"
+    ).run()
+    const res = await request(app).get('/metrics').set(bearer())
+    expect(res.body.overdue).toBeGreaterThan(0)
+  })
+
   it('returns counts', async () => {
     const res = await request(app).get('/metrics').set(bearer())
     expect(res.status).toBe(200)
@@ -211,14 +238,14 @@ describe('GET /export.csv', () => {
   })
 })
 
-describe('POST /summarize', () => {
+describe('POST /feedback/:id/summary', () => {
   it('returns 404 for an unknown id instead of crashing', async () => {
-    const res = await request(app).post('/summarize').set(bearer()).send({ id: 9999 })
+    const res = await request(app).post('/feedback/9999/summary').set(bearer())
     expect(res.status).toBe(404)
   })
 
   it('summarizes with the fake provider', async () => {
-    const res = await request(app).post('/summarize').set(bearer()).send({ id: 1 })
+    const res = await request(app).post('/feedback/1/summary').set(bearer())
     expect(res.status).toBe(200)
     expect(typeof res.body.summary).toBe('string')
   })
@@ -229,6 +256,14 @@ describe('error handling', () => {
     const res = await request(app).get('/nope').set(bearer())
     expect(res.status).toBe(404)
     expect(res.body).toEqual({ error: 'Not found' })
+  })
+
+  it('returns 413 for an oversized body', async () => {
+    const res = await request(app)
+      .post('/feedback/1/notes')
+      .set(bearer())
+      .send({ body: 'x'.repeat(200 * 1024) })
+    expect(res.status).toBe(413)
   })
 
   it('returns 400 for malformed JSON', async () => {
@@ -262,17 +297,50 @@ describe('GET /customers/:id', () => {
   })
 })
 
-describe('POST /feedback/:id/resolve', () => {
-  it('flips open → resolved and back (toggle semantics until phase 3)', async () => {
-    const first = await request(app).post('/feedback/4/resolve').set(bearer())
+describe('POST /feedback/:id/status', () => {
+  it('sets the status explicitly and is idempotent', async () => {
+    const first = await request(app)
+      .post('/feedback/4/status')
+      .set(bearer())
+      .send({ status: 'resolved' })
     expect(first.status).toBe(200)
-    expect(first.body.status).toBe('resolved')
-    const second = await request(app).post('/feedback/4/resolve').set(bearer())
-    expect(second.body.status).toBe('open')
+    expect(first.body).toMatchObject({
+      id: 4,
+      status: 'resolved',
+      customer_name: expect.any(String),
+    })
+    // A second identical request (double-click, second agent) must not flip it back.
+    const second = await request(app)
+      .post('/feedback/4/status')
+      .set(bearer())
+      .send({ status: 'resolved' })
+    expect(second.body.status).toBe('resolved')
+    const reopened = await request(app)
+      .post('/feedback/4/status')
+      .set(bearer())
+      .send({ status: 'open' })
+    expect(reopened.body.status).toBe('open')
+  })
+
+  it('rejects unknown statuses and a missing body', async () => {
+    expect(
+      (await request(app).post('/feedback/4/status').set(bearer()).send({ status: 'done' })).status
+    ).toBe(400)
+    expect((await request(app).post('/feedback/4/status').set(bearer()).send({})).status).toBe(400)
   })
 
   it('returns 404 for an unknown id and 400 for a non-numeric id', async () => {
-    expect((await request(app).post('/feedback/9999/resolve').set(bearer())).status).toBe(404)
-    expect((await request(app).post('/feedback/abc/resolve').set(bearer())).status).toBe(400)
+    expect(
+      (await request(app).post('/feedback/9999/status').set(bearer()).send({ status: 'open' }))
+        .status
+    ).toBe(404)
+    expect(
+      (await request(app).post('/feedback/abc/status').set(bearer()).send({ status: 'open' }))
+        .status
+    ).toBe(400)
+  })
+
+  it('no longer exposes the toggle route', async () => {
+    expect((await request(app).post('/feedback/4/resolve').set(bearer())).status).toBe(404)
   })
 })

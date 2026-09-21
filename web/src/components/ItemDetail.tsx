@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react'
 import {
   addNote,
+  errorMessage,
   fetchCustomer,
   fetchItem,
   fetchNotes,
   fetchUsers,
+  setStatus,
   summarize,
-  toggleResolve,
   updateAssignment,
 } from '../api'
 import { CustomerProfile, FeedbackItem, InternalNote, User } from '../types'
+import { useClickCooldown } from '../hooks/useClickCooldown'
 
 export default function ItemDetail({
   id,
@@ -30,6 +32,9 @@ export default function ItemDetail({
   const [dueAt, setDueAt] = useState('')
   const [noteBody, setNoteBody] = useState('')
   const [privateNote, setPrivateNote] = useState(true)
+  const [error, setError] = useState('')
+  const [summarizing, setSummarizing] = useState(false)
+  const allowStatusClick = useClickCooldown()
 
   useEffect(() => {
     let cancelled = false
@@ -61,38 +66,58 @@ export default function ItemDetail({
     }
   }, [id, token])
 
-  const onResolve = async () => {
-    if (!item) return
-    const updated = await toggleResolve(item.id, token)
-    setItem({ ...item, status: updated.status })
+  const onToggleStatus = async () => {
+    if (!item || !allowStatusClick(item.id)) return
+    try {
+      setItem(await setStatus(item.id, item.status === 'open' ? 'resolved' : 'open', token))
+      setError('')
+    } catch (err) {
+      setError(errorMessage(err))
+    }
   }
 
   const onSummarize = async () => {
+    setSummarizing(true)
+    setError('')
     try {
       const data = await summarize(id, token)
       setSummary(data.summary)
-    } catch (e) {}
+    } catch (err) {
+      setError(errorMessage(err))
+    } finally {
+      setSummarizing(false)
+    }
   }
 
   const onSaveAssignment = async () => {
     if (!item) return
-    const updated = await updateAssignment(
-      item.id,
-      {
-        assignee_id: assigneeId ? Number(assigneeId) : null,
-        priority,
-        due_at: dueAt,
-      },
-      token
-    )
-    setItem(updated)
+    try {
+      const updated = await updateAssignment(
+        item.id,
+        {
+          assignee_id: assigneeId ? Number(assigneeId) : null,
+          priority,
+          due_at: dueAt,
+        },
+        token
+      )
+      setItem(updated)
+      setError('')
+    } catch (err) {
+      setError(errorMessage(err))
+    }
   }
 
   const onAddNote = async () => {
     if (!noteBody.trim()) return
-    const note = await addNote(id, { body: noteBody, is_private: privateNote }, token)
-    setNotes([note, ...notes])
-    setNoteBody('')
+    try {
+      const note = await addNote(id, { body: noteBody, is_private: privateNote }, token)
+      setNotes([note, ...notes])
+      setNoteBody('')
+      setError('')
+    } catch (err) {
+      setError(errorMessage(err))
+    }
   }
 
   if (!item) {
@@ -154,13 +179,14 @@ export default function ItemDetail({
             <button onClick={onSaveAssignment}>Save routing</button>
           </div>
           <div className="detail-actions">
-            <button onClick={onResolve}>
+            <button onClick={onToggleStatus}>
               {item.status === 'open' ? 'Mark resolved' : 'Reopen'}
             </button>
-            <button className="secondary" onClick={onSummarize}>
-              Summarize
+            <button className="secondary" onClick={onSummarize} disabled={summarizing}>
+              {summarizing ? 'Summarizing…' : 'Summarize'}
             </button>
           </div>
+          {error && <div className="error">{error}</div>}
           {summary && (
             <div className="summary">
               <h3>Summary</h3>
