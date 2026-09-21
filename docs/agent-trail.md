@@ -382,3 +382,49 @@ agent had no key and did not ask me to paste one.
 
 **Also:** rebased onto `shippable` after PR #7 merged so the workflow file matches and
 the review can actually run.
+
+**Correction (20:35).** The "three silent reviews" were one silent review and two bad
+checks by the agent: its monitor filtered comments on login `claude`, but the API returns
+`claude[bot]`; and once it queried the instant the job finished, before the comment had
+landed. #6's rerun and #8's first run both posted. PRs #5, #7 and #9 (trigger change,
+prompt line, revert) were therefore churn on bad evidence — I asked for #9 to restore the
+original, which is where we ended up anyway. The agent owned this without being asked
+once the #8 comment appeared. The lesson it had logged three times applied to itself.
+
+**Also (20:40):** the agent committed the correction above directly onto local
+`shippable` by mistake (not pushed), noticed, moved it to the phase-6 branch and reset
+local `shippable` to origin. Then hit a rebase conflict in this file when #8 merged and
+resolved it by keeping both blocks.
+
+---
+
+## 7. Server structure + ops — `refactor/server-structure` (20:25–)
+
+**My prompt:** "#8 merged, start phase 6." Scope agreed beforehand: route split, helmet,
+CORS origin from env, `/health`, production build/start. **ESLint skipped** (my call —
+typecheck + 57 tests already gate CI; two-workspace ESLint config is 20+ min).
+
+**Agent did (20:25–20:34):**
+- `app.ts` (329 lines) → composition root (50 lines) + `routes/{auth,users,metrics,
+  export,customers,feedback}.ts` + `feedback-queries.ts` (the shared JOIN, filter builder
+  and `getFeedbackItem`). Handlers lifted verbatim — the 57 existing tests are the proof
+  that behaviour didn't change. No services/repositories layer: YAGNI at this size.
+- `helmet`, `x-powered-by` off, CORS restricted to `CORS_ORIGIN` (default: the Vite dev
+  server), `GET /health` for load balancers.
+- Production build: the server's `tsc` was `noEmit` and imports are extension-less ESM,
+  so plain `tsc` output wouldn't run under Node. `esbuild` bundles to one
+  `dist/server.js` with native modules external; `npm start` runs it. Verified: bundle
+  boots, `/health` 200, helmet headers present.
+- 3 tests (60 total): health, security headers, CORS allows configured origin only.
+- README: build/start section, layout section rewritten to point at the new structure.
+
+**Left alone on purpose:** ESLint (agreed), request logging / request ids (would want
+`pino` — KNOWN-ISSUES), graceful shutdown (SQLite is synchronous; closing the process is
+safe).
+
+**PR #10 review (posted, 3 min):** the lift was confirmed byte-for-byte for SQL, CSV,
+bcrypt and auth. One real finding: my config comment claimed `CORS_ORIGIN=*` opens the
+API; the `cors` package ignores `'*'` inside an array, so it fails closed. Reproduced
+with curl. Decision: **not** adding wildcard support — customer data, never open CORS —
+fixed the comment and pinned the closed behaviour with a test. The reviewer also noted
+that a test for this case would have caught the wrong comment; fair.
