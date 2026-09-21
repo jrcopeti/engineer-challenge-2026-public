@@ -149,7 +149,8 @@ export default function ItemDetail({
             <span className={'priority ' + item.priority}>{item.priority}</span>
             <span className="muted">{new Date(item.created_at).toLocaleString()}</span>
           </div>
-          <div className="message" dangerouslySetInnerHTML={{ __html: item.message }} />
+          {/* Customer text is untrusted: render as text, keep line breaks. */}
+          <div className="message user-text">{item.message}</div>
           <div className="assignment-panel">
             <label>
               Owner
@@ -190,7 +191,7 @@ export default function ItemDetail({
           {summary && (
             <div className="summary">
               <h3>Summary</h3>
-              <div dangerouslySetInnerHTML={{ __html: summary }} />
+              <div className="user-text">{summary}</div>
             </div>
           )}
         </div>
@@ -242,7 +243,7 @@ export default function ItemDetail({
                     <strong>{note.author_name}</strong>
                     <span>{note.is_private ? 'Private' : 'Shared'}</span>
                   </div>
-                  <div dangerouslySetInnerHTML={{ __html: note.body }} />
+                  <div className="user-text">{note.body}</div>
                 </article>
               ))}
             </div>

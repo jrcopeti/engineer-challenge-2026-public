@@ -71,8 +71,17 @@ function getFeedbackItem(id: number): FeedbackItem {
   return row
 }
 
+/**
+ * Quote a CSV cell. Doubles quotes, and prefixes a tab when the value starts with a
+ * character spreadsheets treat as a formula (`=`, `+`, `-`, `@`) or a control character —
+ * `=HYPERLINK(...)` in a customer message must open as text, not execute.
+ */
 function csvCell(value: unknown) {
-  return `"${String(value ?? '').replace(/"/g, '""')}"`
+  let text = String(value ?? '')
+  if (/^[=+\-@\t\r]/.test(text)) {
+    text = `\t${text}`
+  }
+  return `"${text.replace(/"/g, '""')}"`
 }
 
 app.post(
@@ -157,11 +166,12 @@ app.get('/export.csv', authenticate, (req: Request, res: Response) => {
   const { status, q } = exportQuery.parse(req.query)
   const { where, params } = feedbackFilters(status, q)
 
-  type ExportRow = FeedbackItem & { plan: string; internal_notes: string | null }
+  type ExportRow = FeedbackItem & { plan: string; shared_notes: string | null }
   const rows = db
     .prepare(
       `SELECT f.*, c.name AS customer_name, c.email AS customer_email, c.plan, u.name AS assignee_name,
-        (SELECT GROUP_CONCAT(body, ' | ') FROM feedback_notes WHERE feedback_id = f.id) AS internal_notes
+        (SELECT GROUP_CONCAT(body, ' | ') FROM feedback_notes
+           WHERE feedback_id = f.id AND is_private = 0) AS shared_notes
        FROM feedback f
        JOIN customers c ON c.id = f.customer_id
        LEFT JOIN users u ON u.id = f.assignee_id
@@ -181,7 +191,7 @@ app.get('/export.csv', authenticate, (req: Request, res: Response) => {
     'assignee',
     'due_at',
     'message',
-    'internal_notes',
+    'shared_notes',
   ]
   const lines = [
     header.join(','),
@@ -197,7 +207,7 @@ app.get('/export.csv', authenticate, (req: Request, res: Response) => {
         row.assignee_name,
         row.due_at,
         row.message,
-        row.internal_notes,
+        row.shared_notes,
       ]
         .map(csvCell)
         .join(',')
