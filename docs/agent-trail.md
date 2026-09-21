@@ -326,3 +326,10 @@ the real notes form: rendered as literal text, `onerror` never fired.
 
 **Left alone on purpose:** private-note *visibility* semantics (who may read them in the
 UI) — the product decision I made earlier: document in KNOWN-ISSUES, don't guess.
+
+**PR #6 review: ran, posted nothing.** 2 turns, 145 s, `permission_denials_count: 6`,
+no comment — and the action hides the model's output, so the review was lost. Likely
+cause: it returned the review as a message instead of calling `gh pr comment`. Fix in
+PR #5's prompt (the official example's "only post GitHub comments" line); job re-run on
+#6. Third distinct way a green check meant nothing (skip on PR #1, skip on PR #4, silent
+no-post here). Lesson: the check mark is not the review — read the log or the comment.
