@@ -282,3 +282,8 @@ what lets the catch site separate "expected failure with a status and a human me
 (show it) from "a bug" (500 / generic text, never leak the message). A plain thrown object
 loses the stack and still needs a discriminator; a bare `Error` can't be told apart from a
 `TypeError`. One class with `status` as data; `notFound()` is a factory, not a subclass.
+
+**PR #4 review job: skipped, not passed.** The PR edits `claude-review.yml`, and the
+action refuses to run unless the workflow file matches the default branch — same silent
+green as PR #1. Caught by checking the run log rather than trusting the check mark. CI
+itself is real. Decision: merge on my own review; the new trigger applies from PR #5.
