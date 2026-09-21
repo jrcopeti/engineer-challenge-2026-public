@@ -301,3 +301,35 @@ used the in-flight flag the agent had itself explained doesn't work on a fast ne
 Reproduced with two clicks 120 ms apart in the detail view → `open` then `resolved`.
 Fix: one shared `useClickCooldown` hook (`web/src/hooks/`) used by both components,
 instead of a second copy of the pattern. Verified: one request, state stays.
+
+---
+
+## 5. XSS + CSV — `fix/xss-csv-injection` (19:40–)
+
+**My prompt:** "PR#4 is merged. Do the small PR for the review and do the next phase."
+PR #5 (trigger change, 1 line) opened first; it cannot be bot-reviewed by design.
+
+**Agent did (19:40–19:42):**
+- Removed all three `dangerouslySetInnerHTML` in `ItemDetail.tsx`; message, summary and
+  note body render as text with `white-space: pre-wrap` so line breaks survive.
+- `csvCell` prefixes a tab when a value starts with `=`, `+`, `-`, `@`, tab or CR (the
+  OWASP CSV-injection mitigation), on top of the existing quote doubling.
+- Private notes excluded from the export (`is_private = 0` in the `GROUP_CONCAT`), column
+  renamed `internal_notes` → `shared_notes` so the header is honest about its contents.
+- 4 tests (52 total): seeded `=HYPERLINK` row is neutralised; every formula-leading
+  character; quotes still doubled; "VIP account" (private) absent, "Reproduced in Chrome"
+  (shared) present.
+
+**Verified in the browser:** the seeded `<strong>Heads up:</strong>` message arrives as
+`&lt;strong&gt;`, zero elements. Submitted `<img src=x onerror=…><script>…</script>` via
+the real notes form: rendered as literal text, `onerror` never fired.
+
+**Left alone on purpose:** private-note *visibility* semantics (who may read them in the
+UI) — the product decision I made earlier: document in KNOWN-ISSUES, don't guess.
+
+**PR #6 review: ran, posted nothing.** 2 turns, 145 s, `permission_denials_count: 6`,
+no comment — and the action hides the model's output, so the review was lost. Likely
+cause: it returned the review as a message instead of calling `gh pr comment`. Fix in
+PR #5's prompt (the official example's "only post GitHub comments" line); job re-run on
+#6. Third distinct way a green check meant nothing (skip on PR #1, skip on PR #4, silent
+no-post here). Lesson: the check mark is not the review — read the log or the comment.

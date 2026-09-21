@@ -532,6 +532,11 @@ button {
   gap: 12px;
 }
 
+.user-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .message {
   background: #00ffff;
   border: 5px dashed #ff0000;
