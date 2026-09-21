@@ -107,6 +107,7 @@ export default function Inbox({ token }: { token: string }) {
           setSelectedId(null)
           loadMetrics()
         }}
+        onSelect={setSelectedId}
       />
     )
   }

@@ -17,10 +17,12 @@ export default function ItemDetail({
   id,
   token,
   onBack,
+  onSelect,
 }: {
   id: number
   token: string
   onBack: () => void
+  onSelect: (id: number) => void
 }) {
   const [item, setItem] = useState<FeedbackItem | null>(null)
   const [users, setUsers] = useState<User[]>([])
@@ -217,12 +219,21 @@ export default function ItemDetail({
               </div>
               <h4>Recent history</h4>
               <ul className="history-list">
-                {customer.history.map((historyItem) => (
-                  <li key={historyItem.id}>
-                    <span className={'pill badge ' + historyItem.status}>{historyItem.status}</span>
-                    <span>{historyItem.message}</span>
-                  </li>
-                ))}
+                {customer.history
+                  .filter((historyItem) => historyItem.id !== id)
+                  .map((historyItem) => (
+                    <li key={historyItem.id}>
+                      <button className="history-link" onClick={() => onSelect(historyItem.id)}>
+                        <span className={'pill badge ' + historyItem.status}>
+                          {historyItem.status}
+                        </span>
+                        <span>{historyItem.message}</span>
+                      </button>
+                    </li>
+                  ))}
+                {customer.history.filter((historyItem) => historyItem.id !== id).length === 0 && (
+                  <li className="muted">No other feedback from this customer.</li>
+                )}
               </ul>
             </section>
           )}

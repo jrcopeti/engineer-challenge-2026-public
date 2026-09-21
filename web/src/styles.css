@@ -496,13 +496,25 @@ label > select {
   font-size: 13px;
 }
 .history-list li {
-  display: flex;
-  gap: 8px;
-  align-items: baseline;
   min-width: 0;
   overflow: hidden;
 }
-.history-list li span:last-child {
+.history-link {
+  width: 100%;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  border: none;
+  background: none;
+  padding: 2px 4px;
+  margin: 0 -4px;
+  text-align: left;
+  min-width: 0;
+}
+.history-link:hover {
+  background: var(--surface);
+}
+.history-link span:last-child {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
