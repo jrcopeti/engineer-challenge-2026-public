@@ -71,3 +71,9 @@ I could use my Claude subscription instead (`claude setup-token` → `CLAUDE_COD
 + installing the Claude GitHub App). Agent checked the action docs, confirmed
 `claude_code_oauth_token` is a supported input, and switched the workflow. No API key
 needed for CI; the Anthropic key is only used by the app's own summarizer.
+
+**Caught on PR #1:** the Claude review job reported *pass* in 10 s. Too fast. The log
+showed `Skipping action due to workflow validation: the workflow file must exist ... on the
+repository's default branch`. The action never ran; the green check was meaningless.
+Fix: make `shippable` the fork's default branch (keeps `master` untouched) so the workflow
+is live from PR #2. CI (typecheck + build) genuinely passed.
