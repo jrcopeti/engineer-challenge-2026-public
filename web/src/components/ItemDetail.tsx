@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
-  ApiError,
   addNote,
+  errorMessage,
   fetchCustomer,
   fetchItem,
   fetchNotes,
@@ -11,10 +11,6 @@ import {
   updateAssignment,
 } from '../api'
 import { CustomerProfile, FeedbackItem, InternalNote, User } from '../types'
-
-function errorMessage(err: unknown) {
-  return err instanceof ApiError ? err.message : 'Something went wrong'
-}
 
 export default function ItemDetail({
   id,

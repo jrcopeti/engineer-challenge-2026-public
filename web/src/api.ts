@@ -10,6 +10,11 @@ export class ApiError extends Error {
   }
 }
 
+/** Message safe to show a user: the server's own text for expected failures, generic otherwise. */
+export function errorMessage(err: unknown): string {
+  return err instanceof ApiError ? err.message : 'Something went wrong'
+}
+
 let onUnauthorized: (() => void) | null = null
 
 /** Called when an authenticated request gets a 401 (expired or revoked token). */
@@ -97,6 +102,7 @@ export function fetchMetrics(token: string) {
   return request<Metrics>('/metrics', { token })
 }
 
+// Not routed through request(): it returns a Blob, and request() only speaks JSON.
 export async function downloadExport(status: string, search: string, token: string): Promise<Blob> {
   const params = new URLSearchParams({ status, q: search })
   const res = await fetch(`${API_URL}/export.csv?${params}`, {

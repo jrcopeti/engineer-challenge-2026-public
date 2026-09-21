@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError, downloadExport, fetchInbox, fetchMetrics, setStatus } from '../api'
+import { downloadExport, errorMessage, fetchInbox, fetchMetrics, setStatus } from '../api'
 import { FeedbackItem, Metrics } from '../types'
 import ItemDetail from './ItemDetail'
 
@@ -7,10 +7,6 @@ const PAGE_SIZE = 10
 const SEARCH_DEBOUNCE_MS = 300
 const POLL_INTERVAL_MS = 45000
 const STATUS_COOLDOWN_MS = 500
-
-function errorMessage(err: unknown) {
-  return err instanceof ApiError ? err.message : 'Something went wrong'
-}
 
 export default function Inbox({ token }: { token: string }) {
   const [items, setItems] = useState<FeedbackItem[]>([])
@@ -23,8 +19,10 @@ export default function Inbox({ token }: { token: string }) {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [error, setError] = useState('')
   // A double-click must not resolve then immediately reopen. Ignore a second click on the
-  // same item while a request is in flight or within a short cooldown of the last one —
-  // on a fast network the first request can finish between the two clicks.
+  // same item within a short cooldown of the last one. A cooldown rather than an
+  // in-flight flag: on a fast network the first request finishes between the two clicks,
+  // so "in flight" would not catch it. After the cooldown the label has already flipped,
+  // so a further click is a deliberate action.
   const lastToggle = useRef(new Map<number, number>())
 
   // Search: wait for typing to pause, then fetch. Resets to page 1.

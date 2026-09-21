@@ -288,3 +288,10 @@ action refuses to run unless the workflow file matches the default branch — sa
 green as PR #1. Caught by checking the run log rather than trusting the check mark. CI
 itself is real. I told the agent to fix it: the trigger change is pulled out of this PR
 into its own (which by the same rule can't be reviewed either), so #4 gets a real review.
+
+**PR #4 real review (17:17–17:21 UTC):** "Nothing here blocks merge." It independently
+verified the `due_at` picker round-trip doesn't drift on re-save (I hadn't tested that)
+and raised three nits: the double-click comment claimed an in-flight guard that isn't
+there, `errorMessage()` duplicated in two components, `downloadExport` bypasses
+`request()` without saying why. I chose to apply all three on the open PR rather than
+carry them forward.
