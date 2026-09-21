@@ -14,7 +14,7 @@ import {
   loginBody,
   metricsQuery,
   noteBody,
-  summarizeBody,
+  statusBody,
 } from './validation'
 import type {
   CountRow,
@@ -270,22 +270,21 @@ app.post('/feedback/:id/notes', authenticate, (req: Request, res: Response) => {
   res.status(201).json(note)
 })
 
-app.post('/feedback/:id/resolve', authenticate, (req: Request, res: Response) => {
+// Explicit set, not a toggle: two agents clicking at once converge on the same state
+// instead of flipping each other back.
+app.post('/feedback/:id/status', authenticate, (req: Request, res: Response) => {
   const { id } = idParams.parse(req.params)
-  const row = db.prepare('SELECT * FROM feedback WHERE id = ?').get(id) as FeedbackRow | undefined
-  if (!row) throw notFound('Feedback not found')
-
-  // Toggle semantics kept for now; phase 3 replaces this with an explicit status set.
-  const nextStatus = row.status === 'open' ? 'resolved' : 'open'
-  db.prepare('UPDATE feedback SET status = ? WHERE id = ?').run(nextStatus, id)
-  res.json({ ...row, status: nextStatus })
+  const { status } = statusBody.parse(req.body)
+  const result = db.prepare('UPDATE feedback SET status = ? WHERE id = ?').run(status, id)
+  if (result.changes === 0) throw notFound('Feedback not found')
+  res.json(getFeedbackItem(id))
 })
 
 app.post(
-  '/summarize',
+  '/feedback/:id/summary',
   authenticate,
   asyncHandler(async (req, res) => {
-    const { id } = summarizeBody.parse(req.body)
+    const { id } = idParams.parse(req.params)
     const row = db.prepare('SELECT message FROM feedback WHERE id = ?').get(id) as
       Pick<FeedbackRow, 'message'> | undefined
     if (!row) throw notFound('Feedback not found')

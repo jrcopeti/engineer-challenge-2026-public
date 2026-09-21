@@ -29,20 +29,22 @@ export const metricsQuery = z.object({
 export const assignmentBody = z.object({
   assignee_id: positiveInt.nullable().default(null),
   priority: z.enum(FEEDBACK_PRIORITIES),
-  // The date input sends YYYY-MM-DD; the seed stores full ISO. Both accepted, '' → null.
+  // The date input sends YYYY-MM-DD. Stored as ISO UTC, end of that day: a due *date*
+  // means "by the end of that day", and the overdue check compares against now.
   due_at: z
     .union([isoDate, isoDateTime, z.literal('')])
     .nullable()
     .default(null)
-    .transform((v) => (v === '' ? null : v)),
+    .transform((v) => (v === '' ? null : v))
+    .transform((v) => (v && v.length === 10 ? `${v}T23:59:59.999Z` : v)),
 })
+
+export const statusBody = z.object({ status: z.enum(FEEDBACK_STATUSES) })
 
 export const noteBody = z.object({
   body: z.string().trim().min(1, 'Note cannot be empty').max(5000),
   is_private: z.boolean().default(false),
 })
-
-export const summarizeBody = z.object({ id: positiveInt })
 
 /**
  * Escape a user string for use inside a LIKE pattern. Callers must add

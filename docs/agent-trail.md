@@ -229,3 +229,56 @@ reviewer flagged — 42 tests total.
 
 Lesson for the trail: an agent will happily build what you ask for; reading the diff
 before committing is where the scope call actually gets made.
+
+**PR #3, second automated review (after the follow-up push):** a repeat of round one
+except one new item — `express.json` size limit throws `PayloadTooLargeError`, which the
+error handler maps to 500 instead of 413. Pulled into phase 3.
+
+**Workflow decision (mine):** every push was re-running a full review of the whole PR
+(~5 min, same findings again). Chose to drop `synchronize` from the trigger: one review
+per PR at open; re-review on demand by toggling draft → ready. Lands in this PR.
+
+**Gap 18:20–~19:20: lunch break.** Not review time; not agent time.
+
+---
+
+## 4. Correctness — `fix/correctness` (18:22–)
+
+**My prompt:** "go with option 1, I merged PR#3, start phase 3 first."
+
+**Agent did (18:22–18:28, backend + frontend + browser verification):**
+- `POST /feedback/:id/status` with an explicit `{ status }` replaces the `/resolve`
+  toggle; idempotent, so two agents clicking at once converge instead of flipping.
+  `POST /summarize` → `POST /feedback/:id/summary` (id in the path like every other route).
+- `due_at` normalised on write: a picker date becomes `T23:59:59.999Z` ("due by end of
+  that day"); full ISO kept as given; `''` → NULL. Closes the mixed-format finding from #3.
+- `express.json` size limit now maps to 413 (from the #3 review).
+- `web/src/api.ts` rewritten around one `request()` helper: checks `res.ok`, throws
+  `ApiError` with the server's message, calls a logout handler on 401 for authenticated
+  requests (App registers it). Every component shows errors instead of swallowing them;
+  Summarize shows a loading state and disables while in flight.
+- `Inbox.tsx`: search debounced 300 ms with `AbortController`; the poll runs on the
+  *current* page/filter/search (was pinned to the initial state by a stale closure) and
+  no longer overwrites server truth with local state; optimistic status update with
+  rollback; metrics refresh after a status change and on return from detail.
+- Tests: status set idempotent / rejects unknown values / old route gone; `due_at`
+  normalisation both shapes; metrics window + overdue; 413. 48 total.
+
+**Caught in the browser, twice:** a double-click on "Resolve" resolved then reopened.
+Explicit-set on the server is correct (each request said what it wanted); the UI was
+the problem. First fix — ignore clicks while a request is in flight — looked like it
+didn't work. Second fix — a 500 ms per-item cooldown — also "didn't work". The real
+cause: my scripted edit of the handler silently failed to match after prettier reflowed
+the lines, so the browser was running code with *no guard at all*, and I'd trusted the
+typecheck instead of reading the served module. Applied the edit by hand; one POST,
+row stays resolved. Lesson recorded: after an automated edit, verify the edit landed
+before verifying the behaviour.
+
+**Also verified by hand:** 13 keystrokes → one `/feedback` request; metrics 56/24 →
+55/25 without reload; corrupted token → back to the login screen, no crash.
+
+**Question before commit:** *why are `HttpError` / `ApiError` classes?* — `instanceof` is
+what lets the catch site separate "expected failure with a status and a human message"
+(show it) from "a bug" (500 / generic text, never leak the message). A plain thrown object
+loses the stack and still needs a discriminator; a bare `Error` can't be told apart from a
+`TypeError`. One class with `status` as data; `notFound()` is a factory, not a subclass.

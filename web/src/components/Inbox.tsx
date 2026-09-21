@@ -1,9 +1,16 @@
-import { useEffect, useState } from 'react'
-import { downloadExport, fetchInbox, fetchMetrics, toggleResolve } from '../api'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ApiError, downloadExport, fetchInbox, fetchMetrics, setStatus } from '../api'
 import { FeedbackItem, Metrics } from '../types'
 import ItemDetail from './ItemDetail'
 
 const PAGE_SIZE = 10
+const SEARCH_DEBOUNCE_MS = 300
+const POLL_INTERVAL_MS = 45000
+const STATUS_COOLDOWN_MS = 500
+
+function errorMessage(err: unknown) {
+  return err instanceof ApiError ? err.message : 'Something went wrong'
+}
 
 export default function Inbox({ token }: { token: string }) {
   const [items, setItems] = useState<FeedbackItem[]>([])
@@ -11,49 +18,88 @@ export default function Inbox({ token }: { token: string }) {
   const [page, setPage] = useState(1)
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [error, setError] = useState('')
+  // A double-click must not resolve then immediately reopen. Ignore a second click on the
+  // same item while a request is in flight or within a short cooldown of the last one —
+  // on a fast network the first request can finish between the two clicks.
+  const lastToggle = useRef(new Map<number, number>())
 
-  const load = async () => {
-    const data = await fetchInbox(page, filter, search, token)
-    setItems(data.items)
-    setTotal(data.total)
-  }
-
+  // Search: wait for typing to pause, then fetch. Resets to page 1.
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search.trim())
+      setPage(1)
+    }, SEARCH_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  // Load on every change of page/filter/search, and poll on the *current* view.
+  // The AbortController drops responses that arrive after the inputs changed.
+  useEffect(() => {
+    const controller = new AbortController()
+    const load = async () => {
+      try {
+        const data = await fetchInbox(page, filter, debouncedSearch, token, controller.signal)
+        setItems(data.items)
+        setTotal(data.total)
+        setError('')
+      } catch (err) {
+        if (controller.signal.aborted) return
+        setError(errorMessage(err))
+      }
+    }
     load()
-  }, [page, filter, search])
+    const interval = setInterval(load, POLL_INTERVAL_MS)
+    return () => {
+      controller.abort()
+      clearInterval(interval)
+    }
+  }, [page, filter, debouncedSearch, token])
 
-  useEffect(() => {
-    fetchMetrics(token).then(setMetrics)
+  const loadMetrics = useCallback(() => {
+    fetchMetrics(token)
+      .then(setMetrics)
+      .catch(() => setMetrics(null))
   }, [token])
 
   useEffect(() => {
-    const interval = setInterval(async () => {
-      const data = await fetchInbox(page, filter, search, token)
-      const merged = data.items.map((incoming) => {
-        const local = items.find((it) => it.id === incoming.id)
-        return local ? { ...incoming, status: local.status } : incoming
-      })
-      setItems(merged)
-    }, 45000)
-    return () => clearInterval(interval)
-  }, [])
+    loadMetrics()
+  }, [loadMetrics])
 
-  const onResolve = async (item: FeedbackItem) => {
+  const onToggleStatus = async (item: FeedbackItem) => {
+    const now = Date.now()
+    if (now - (lastToggle.current.get(item.id) ?? 0) < STATUS_COOLDOWN_MS) return
+    lastToggle.current.set(item.id, now)
     const nextStatus = item.status === 'open' ? 'resolved' : 'open'
-    setItems(items.map((it) => (it.id === item.id ? { ...it, status: nextStatus } : it)))
-    await toggleResolve(item.id, token)
+    // Optimistic update, rolled back if the server disagrees.
+    setItems((current) =>
+      current.map((it) => (it.id === item.id ? { ...it, status: nextStatus } : it))
+    )
+    try {
+      const updated = await setStatus(item.id, nextStatus, token)
+      setItems((current) => current.map((it) => (it.id === item.id ? updated : it)))
+      loadMetrics()
+    } catch (err) {
+      setItems((current) => current.map((it) => (it.id === item.id ? item : it)))
+      setError(errorMessage(err))
+    }
   }
 
   const onExport = async () => {
-    const blob = await downloadExport(filter, search, token)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'pulse-feedback-export.csv'
-    a.click()
-    URL.revokeObjectURL(url)
+    try {
+      const blob = await downloadExport(filter, debouncedSearch, token)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'pulse-feedback-export.csv'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError(errorMessage(err))
+    }
   }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
@@ -65,7 +111,7 @@ export default function Inbox({ token }: { token: string }) {
         token={token}
         onBack={() => {
           setSelectedId(null)
-          load()
+          loadMetrics()
         }}
       />
     )
@@ -111,16 +157,15 @@ export default function Inbox({ token }: { token: string }) {
         <input
           className="search"
           value={search}
-          onChange={(e) => {
-            setSearch(e.target.value)
-            setPage(1)
-          }}
+          onChange={(e) => setSearch(e.target.value)}
           placeholder="Search VIPs, refunds, chaos..."
         />
         <button className="export-button" onClick={onExport}>
           Export CSV
         </button>
       </div>
+
+      {error && <div className="error">{error}</div>}
 
       <table className="feedback-table">
         <thead>
@@ -159,7 +204,7 @@ export default function Inbox({ token }: { token: string }) {
                   className="link-button"
                   onClick={(e) => {
                     e.stopPropagation()
-                    onResolve(item)
+                    onToggleStatus(item)
                   }}
                 >
                   {item.status === 'open' ? 'Resolve' : 'Reopen'}

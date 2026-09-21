@@ -31,9 +31,12 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
   if (err instanceof HttpError) {
     return res.status(err.status).json({ error: err.message })
   }
-  // Malformed JSON from express.json()
+  // express.json(): malformed body → SyntaxError; over the size limit → type 'entity.too.large'
   if (err instanceof SyntaxError && 'body' in err) {
     return res.status(400).json({ error: 'Malformed JSON body' })
+  }
+  if (typeof err === 'object' && err !== null && 'type' in err && err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'Request body too large' })
   }
   console.error(err)
   res.status(500).json({ error: 'Something went wrong' })

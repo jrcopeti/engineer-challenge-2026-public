@@ -1,3 +1,6 @@
+export type FeedbackStatus = 'open' | 'resolved'
+export type FeedbackPriority = 'low' | 'normal' | 'high' | 'urgent'
+
 export type FeedbackItem = {
   id: number
   customer_id: number
@@ -5,8 +8,8 @@ export type FeedbackItem = {
   customer_email: string
   channel: string
   message: string
-  status: 'open' | 'resolved'
-  priority: 'low' | 'normal' | 'high' | 'urgent'
+  status: FeedbackStatus
+  priority: FeedbackPriority
   assignee_id: number | null
   assignee_name: string | null
   due_at: string | null
