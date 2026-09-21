@@ -398,8 +398,26 @@ resolved it by keeping both blocks.
 
 ---
 
-## 7. Server structure + ops — `refactor/server-structure` (20:40–)
+## 7. Server structure + ops — `refactor/server-structure` (20:25–)
 
 **My prompt:** "#8 merged, start phase 6." Scope agreed beforehand: route split, helmet,
 CORS origin from env, `/health`, production build/start. **ESLint skipped** (my call —
 typecheck + 57 tests already gate CI; two-workspace ESLint config is 20+ min).
+
+**Agent did (20:25–20:34):**
+- `app.ts` (329 lines) → composition root (50 lines) + `routes/{auth,users,metrics,
+  export,customers,feedback}.ts` + `feedback-queries.ts` (the shared JOIN, filter builder
+  and `getFeedbackItem`). Handlers lifted verbatim — the 57 existing tests are the proof
+  that behaviour didn't change. No services/repositories layer: YAGNI at this size.
+- `helmet`, `x-powered-by` off, CORS restricted to `CORS_ORIGIN` (default: the Vite dev
+  server), `GET /health` for load balancers.
+- Production build: the server's `tsc` was `noEmit` and imports are extension-less ESM,
+  so plain `tsc` output wouldn't run under Node. `esbuild` bundles to one
+  `dist/server.js` with native modules external; `npm start` runs it. Verified: bundle
+  boots, `/health` 200, helmet headers present.
+- 3 tests (60 total): health, security headers, CORS allows configured origin only.
+- README: build/start section, layout section rewritten to point at the new structure.
+
+**Left alone on purpose:** ESLint (agreed), request logging / request ids (would want
+`pino` — KNOWN-ISSUES), graceful shutdown (SQLite is synchronous; closing the process is
+safe).

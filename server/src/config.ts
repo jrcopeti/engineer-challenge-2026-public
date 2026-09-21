@@ -25,6 +25,8 @@ export const config = {
   jwtSecret: requireJwtSecret(),
   jwtExpiresIn: '7d' as const,
   port: Number(process.env.PORT) || 4000,
+  // Browser origin allowed to call the API. Comma-separate for several; '*' for any.
+  corsOrigin: (process.env.CORS_ORIGIN ?? 'http://localhost:5173').split(',').map((o) => o.trim()),
   // ':memory:' for tests; a file path otherwise.
   dbPath: process.env.DB_PATH,
   llm: {

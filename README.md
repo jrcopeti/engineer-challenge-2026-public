@@ -58,22 +58,37 @@ customer profile history, internal notes, a small metrics panel, search, and CSV
 
 Open the web app in your browser and sign in.
 
-## Tests
+## Tests and checks
 
 ```bash
 npm test             # API tests (vitest + supertest against an in-memory SQLite)
 npm run typecheck    # both workspaces
 ```
 
+## Production build
+
+```bash
+npm run build        # web → web/dist (static), server → server/dist/server.js (single ESM bundle)
+npm start            # runs the server bundle; serve web/dist from any static host
+```
+
+Set `CORS_ORIGIN` in `server/.env` to the URL the web app is served from. The API is
+plain HTTP; put it behind TLS (a reverse proxy or the hosting platform).
+
+## Project layout
+
+- `server/src/app.ts` — builds the Express app from routers in `server/src/routes/`
+- `server/src/validation.ts` — zod schemas; every request passes through one
+- `server/src/schema.ts` — tables, constraints, indexes
+- `server/src/llm/` — `Summarizer` interface with fake and Anthropic providers
+- `server/tests/` — API tests against an in-memory database
+- `web/src/api.ts` — every API call goes through `request()`
+
 ## Test login
 
 - **Email:** `alice@pulse.test`
 - **Password:** `password123`
 
-## Project layout
-
-- `server/` — Node + Express + TypeScript API backed by SQLite (`better-sqlite3`).
-- `web/` — React + TypeScript single-page app built with Vite.
 
 ## Optional: live summaries
 
