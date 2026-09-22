@@ -1,121 +1,138 @@
-import { API_URL, LLM_API_KEY } from './config'
-import { CustomerProfile, FeedbackItem, InternalNote, Metrics, User } from './types'
+import { API_URL } from './config'
+import { CustomerProfile, FeedbackItem, FeedbackStatus, InternalNote, Metrics, User } from './types'
 
-export async function login(
-  email: string,
-  password: string
-): Promise<{ token: string; user: User }> {
-  const res = await fetch(`${API_URL}/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  })
-  if (!res.ok) {
-    throw new Error('Login failed')
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string
+  ) {
+    super(message)
   }
-  return res.json()
 }
 
-export async function fetchInbox(
+/** Message safe to show a user: the server's own text for expected failures, generic otherwise. */
+export function errorMessage(err: unknown): string {
+  return err instanceof ApiError ? err.message : 'Something went wrong'
+}
+
+let onUnauthorized: (() => void) | null = null
+
+/** Called when an authenticated request gets a 401 (expired or revoked token). */
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  onUnauthorized = handler
+}
+
+type RequestOptions = {
+  method?: 'GET' | 'POST'
+  token?: string
+  body?: unknown
+  signal?: AbortSignal
+}
+
+/**
+ * Single choke point for every API call: sets headers, checks `res.ok`, turns error
+ * bodies into ApiError, and logs the user out when a token is rejected.
+ */
+async function request<T>(
+  path: string,
+  { method = 'GET', token, body, signal }: RequestOptions = {}
+): Promise<T> {
+  const headers: Record<string, string> = {}
+  if (token) headers.Authorization = `Bearer ${token}`
+  if (body !== undefined) headers['Content-Type'] = 'application/json'
+
+  const res = await fetch(`${API_URL}${path}`, {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal,
+  })
+
+  if (res.status === 401 && token) {
+    onUnauthorized?.()
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => null)
+    const message =
+      data && typeof data.error === 'string' ? data.error : `Request failed (${res.status})`
+    throw new ApiError(res.status, message)
+  }
+  if (res.status === 204) return undefined as T
+  return res.json() as Promise<T>
+}
+
+export function login(email: string, password: string) {
+  return request<{ token: string; user: User }>('/login', {
+    method: 'POST',
+    body: { email, password },
+  })
+}
+
+export function fetchInbox(
   page: number,
   status: string,
   search: string,
-  token: string
-): Promise<{ items: FeedbackItem[]; total: number; page: number }> {
-  const res = await fetch(`${API_URL}/feedback?page=${page}&status=${status}&q=${search}`, {
-    headers: { Authorization: `Bearer ${token}` },
+  token: string,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ page: String(page), status, q: search })
+  return request<{ items: FeedbackItem[]; total: number; page: number }>(`/feedback?${params}`, {
+    token,
+    signal,
   })
-  return res.json()
 }
 
-export async function fetchItem(id: number, token: string): Promise<FeedbackItem> {
-  const res = await fetch(`${API_URL}/feedback/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  return res.json()
+export function fetchItem(id: number, token: string) {
+  return request<FeedbackItem>(`/feedback/${id}`, { token })
 }
 
-export async function toggleResolve(id: number, token: string): Promise<FeedbackItem> {
-  const res = await fetch(`${API_URL}/feedback/${id}/resolve`, {
+export function setStatus(id: number, status: FeedbackStatus, token: string) {
+  return request<FeedbackItem>(`/feedback/${id}/status`, {
     method: 'POST',
+    token,
+    body: { status },
+  })
+}
+
+export function fetchUsers(token: string) {
+  return request<{ users: User[] }>('/users', { token })
+}
+
+export function fetchMetrics(token: string) {
+  return request<Metrics>('/metrics', { token })
+}
+
+// Not routed through request(): it returns a Blob, and request() only speaks JSON.
+export async function downloadExport(status: string, search: string, token: string): Promise<Blob> {
+  const params = new URLSearchParams({ status, q: search })
+  const res = await fetch(`${API_URL}/export.csv?${params}`, {
     headers: { Authorization: `Bearer ${token}` },
   })
-  return res.json()
+  if (res.status === 401) onUnauthorized?.()
+  if (!res.ok) throw new ApiError(res.status, 'Export failed')
+  return res.blob()
 }
 
-export async function fetchUsers(token: string): Promise<{ users: User[] }> {
-  const res = await fetch(`${API_URL}/users`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  return res.json()
+export function fetchCustomer(id: number, token: string) {
+  return request<CustomerProfile>(`/customers/${id}`, { token })
 }
 
-export async function fetchMetrics(token: string): Promise<Metrics> {
-  const res = await fetch(`${API_URL}/metrics`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  return res.json()
-}
-
-export function exportFeedbackUrl(status: string, search: string, token: string) {
-  return `${API_URL}/export.csv?status=${status}&q=${search}&token=${token}`
-}
-
-export async function fetchCustomer(id: number, token: string): Promise<CustomerProfile> {
-  const res = await fetch(`${API_URL}/customers/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  return res.json()
-}
-
-export async function updateAssignment(
+export function updateAssignment(
   id: number,
   data: { assignee_id: number | null; priority: string; due_at: string },
   token: string
-): Promise<FeedbackItem> {
-  const res = await fetch(`${API_URL}/feedback/${id}/assignment`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(data),
-  })
-  return res.json()
+) {
+  return request<FeedbackItem>(`/feedback/${id}/assignment`, { method: 'POST', token, body: data })
 }
 
-export async function fetchNotes(id: number, token: string): Promise<{ notes: InternalNote[] }> {
-  const res = await fetch(`${API_URL}/feedback/${id}/notes`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  return res.json()
+export function fetchNotes(id: number, token: string) {
+  return request<{ notes: InternalNote[] }>(`/feedback/${id}/notes`, { token })
 }
 
-export async function addNote(
-  id: number,
-  data: { body: string; is_private: boolean },
-  token: string
-): Promise<InternalNote> {
-  const res = await fetch(`${API_URL}/feedback/${id}/notes`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(data),
-  })
-  return res.json()
+export function addNote(id: number, data: { body: string; is_private: boolean }, token: string) {
+  return request<InternalNote>(`/feedback/${id}/notes`, { method: 'POST', token, body: data })
 }
 
-export async function summarize(id: number, token: string): Promise<{ summary: string }> {
-  const res = await fetch(`${API_URL}/summarize`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      'x-llm-key': LLM_API_KEY,
-    },
-    body: JSON.stringify({ id }),
-  })
-  return res.json()
+export function summarize(id: number, token: string) {
+  return request<{ summary: string }>(`/feedback/${id}/summary`, { method: 'POST', token })
 }
