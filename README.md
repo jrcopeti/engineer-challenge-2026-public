@@ -1,7 +1,11 @@
 # Pulse
 
-This repository is a coding challenge for engineering candidates. It is not intended
-for production use.
+This repository is a coding challenge for engineering candidates. The hand-in documents
+are [`DECISIONS.md`](DECISIONS.md), [`KNOWN-ISSUES.md`](KNOWN-ISSUES.md),
+[`PRODUCT-NOTE.md`](PRODUCT-NOTE.md), and the agent trail in
+[`docs/agent-trail.md`](docs/agent-trail.md) with the rules it worked under in
+[`CLAUDE.md`](CLAUDE.md). The original state is on `master`; all changes are on
+`shippable`, one PR per change.
 
 Pulse is a small internal customer-feedback inbox for support teams. Sign in, browse
 incoming feedback across email, chat, and app-store channels, open an item to read the
@@ -46,6 +50,7 @@ customer profile history, internal notes, a small metrics panel, search, and CSV
    ```
 
    Re-run this after pulling changes that touch the schema; it drops and recreates every table.
+   The seed creates accounts with well-known passwords — never run it against a real database.
 
 4. Start the API and the web app together:
 

@@ -69,8 +69,11 @@ via the docs MCP before writing the YAML instead of guessing.
 **I overruled:** the agent wired the review action to `ANTHROPIC_API_KEY`. I asked whether
 I could use my Claude subscription instead (`claude setup-token` → `CLAUDE_CODE_OAUTH_TOKEN`
 + installing the Claude GitHub App). Agent checked the action docs, confirmed
-`claude_code_oauth_token` is a supported input, and switched the workflow. No API key
-needed for CI; the Anthropic key is only used by the app's own summarizer.
+`claude_code_oauth_token` is a supported input, and switched the workflow. I still had to
+set the credential myself: install the Claude GitHub App on the fork, run
+`claude setup-token`, and store the result with `gh secret set CLAUDE_CODE_OAUTH_TOKEN`
+— the token never passed through the agent. The Anthropic API key is separate and only
+used by the app's own summarizer.
 
 **Caught on PR #1:** the Claude review job reported *pass* in 10 s. Too fast. The log
 showed `Skipping action due to workflow validation: the workflow file must exist ... on the
@@ -238,7 +241,8 @@ error handler maps to 500 instead of 413. Pulled into phase 3.
 (~5 min, same findings again). Chose to drop `synchronize` from the trigger: one review
 per PR at open; re-review on demand by toggling draft → ready. Lands in this PR.
 
-**Gap 18:20–~19:20: lunch break.** Not review time; not agent time.
+**Gap 18:20–~19:20: my lunch break.** The agent kept working on phase 3 during it (its
+own timestamps below: 18:22–18:28); I reviewed the result when I was back.
 
 ---
 
@@ -526,3 +530,22 @@ to clear is a checklist the next engineer will forget to extend.
 ## 10. Docs + final review — `docs/handin` (21:30–)
 
 **My prompt:** "#12 merged, start phase 8."
+
+**Final reviews on the whole delta (21:30–00:30).** The work would have finished by about
+21:40; the `/code-review` run hit my Claude usage limit, which renewed at 00:20, so the
+findings landed at 00:30. Nothing happened in between.
+- `/security-review`: no findings above the confidence bar. Each fixed class verified
+  independently; staff-wide note visibility judged a documented product gap, not a
+  regression. One informational: seed accounts have well-known passwords → README line.
+- `/code-review master high`: server side clean; five web findings. **One real
+  regression I'd introduced in phase 3** — `onBack` stopped reloading the list (`master`
+  had `load()`), so a status change in the detail view showed stale in the table for up
+  to 45 s. Fixed with a `reloadKey` in the load effect's deps. Also fixed: three
+  fire-and-forget fetches without `.catch`; due dates rendering a day late east of UTC
+  in the table (now formatted in UTC so table and detail agree — verified in Berlin);
+  `revokeObjectURL` in the same tick as `click()`. Left: the stale-DB boot check the
+  reviewer suggested again — same decision as before, same reason (the seed would be
+  blocked by it too); KNOWN-ISSUES.
+
+**Documents:** `DECISIONS.md`, `KNOWN-ISSUES.md`, `PRODUCT-NOTE.md` drafted from this
+trail in my voice; README points at them.
