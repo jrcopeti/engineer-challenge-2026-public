@@ -8,6 +8,12 @@ const PAGE_SIZE = 10
 const SEARCH_DEBOUNCE_MS = 300
 const POLL_INTERVAL_MS = 45000
 
+// due_at is stored as end of day in UTC; show that calendar date, not the viewer's
+// local conversion of it, so the table and the detail's date input agree.
+function formatDueDate(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, { timeZone: 'UTC' })
+}
+
 export default function Inbox({ token }: { token: string }) {
   const [items, setItems] = useState<FeedbackItem[]>([])
   const [total, setTotal] = useState(0)
@@ -19,6 +25,8 @@ export default function Inbox({ token }: { token: string }) {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  // Bumped on return from the detail view so the list reflects edits made there.
+  const [reloadKey, setReloadKey] = useState(0)
   const allowStatusClick = useClickCooldown()
 
   // Search: wait for typing to pause, then fetch. Resets to page 1.
@@ -53,7 +61,7 @@ export default function Inbox({ token }: { token: string }) {
       controller.abort()
       clearInterval(interval)
     }
-  }, [page, filter, debouncedSearch, token])
+  }, [page, filter, debouncedSearch, token, reloadKey])
 
   const loadMetrics = useCallback(() => {
     fetchMetrics(token)
@@ -89,8 +97,11 @@ export default function Inbox({ token }: { token: string }) {
       const a = document.createElement('a')
       a.href = url
       a.download = 'pulse-feedback-export.csv'
+      document.body.appendChild(a)
       a.click()
-      URL.revokeObjectURL(url)
+      a.remove()
+      // Revoke on a later tick: Firefox and Safari may start the download asynchronously.
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
     } catch (err) {
       setError(errorMessage(err))
     }
@@ -108,6 +119,7 @@ export default function Inbox({ token }: { token: string }) {
         token={token}
         onBack={() => {
           setSelectedId(null)
+          setReloadKey((k) => k + 1)
           loadMetrics()
         }}
         onSelect={setSelectedId}
@@ -200,7 +212,7 @@ export default function Inbox({ token }: { token: string }) {
                 </td>
                 <td>
                   {item.due_at ? (
-                    new Date(item.due_at).toLocaleDateString()
+                    formatDueDate(item.due_at)
                   ) : (
                     <span className="muted">No due date</span>
                   )}
