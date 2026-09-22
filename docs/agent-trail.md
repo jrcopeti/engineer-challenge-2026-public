@@ -549,3 +549,7 @@ findings landed at 00:30. Nothing happened in between.
 
 **Documents:** `DECISIONS.md`, `KNOWN-ISSUES.md`, `PRODUCT-NOTE.md` drafted from this
 trail in my voice; README points at them.
+
+**Caught by me on the login page (next morning):** the subtitle's trailing emojis
+wrapped onto a second line. The agent's checks had measured overflow and scroll, not
+line count. Fixed in #13 (card 380 px, subtitle nowrap), verified at 400 px too.
