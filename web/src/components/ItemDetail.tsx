@@ -56,15 +56,24 @@ export default function ItemDetail({
       setPriority(data.priority)
       setDueAt(data.due_at ? data.due_at.slice(0, 10) : '')
 
-      fetchUsers(token).then((userData) => {
-        if (!cancelled) setUsers(userData.users)
-      })
-      fetchCustomer(data.customer_id, token).then((profile) => {
-        if (!cancelled) setCustomer(profile)
-      })
-      fetchNotes(id, token).then((noteData) => {
-        if (!cancelled) setNotes(noteData.notes)
-      })
+      const fail = (err: unknown) => {
+        if (!cancelled) setError(errorMessage(err))
+      }
+      fetchUsers(token)
+        .then((userData) => {
+          if (!cancelled) setUsers(userData.users)
+        })
+        .catch(fail)
+      fetchCustomer(data.customer_id, token)
+        .then((profile) => {
+          if (!cancelled) setCustomer(profile)
+        })
+        .catch(fail)
+      fetchNotes(id, token)
+        .then((noteData) => {
+          if (!cancelled) setNotes(noteData.notes)
+        })
+        .catch(fail)
     }
 
     load()

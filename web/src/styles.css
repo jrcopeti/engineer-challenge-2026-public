@@ -272,7 +272,7 @@ label > select {
 }
 .login-card {
   width: 100%;
-  max-width: 340px;
+  max-width: 380px;
   display: grid;
   gap: 14px;
 }
@@ -282,6 +282,8 @@ label > select {
 .login-card .subtitle {
   margin: -8px 0 4px;
   color: var(--text-2);
+  white-space: nowrap;
+  font-size: 13px;
 }
 .login-card button[type='submit'] {
   margin-top: 4px;
