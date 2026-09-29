@@ -1,7 +1,8 @@
-import { db } from './db'
-import { notFound } from './errors'
-import { likePattern } from './validation'
-import type { FeedbackItem } from './types'
+import { likePattern } from '../validation'
+import type { FeedbackStatus } from '../types'
+
+/** What the inbox list and the CSV export both filter by. */
+export type FeedbackFilter = { status: FeedbackStatus | 'all'; q: string }
 
 /** Feedback joined with customer and assignee — one query instead of two per row. */
 export const FEEDBACK_SELECT = `
@@ -28,10 +29,4 @@ export function feedbackFilters(status: string, search: string) {
     params.push(pattern, pattern, pattern)
   }
   return { where: clauses.length ? `WHERE ${clauses.join(' AND ')}` : '', params }
-}
-
-export function getFeedbackItem(id: number): FeedbackItem {
-  const row = db.prepare(`${FEEDBACK_SELECT} WHERE f.id = ?`).get(id) as FeedbackItem | undefined
-  if (!row) throw notFound('Feedback not found')
-  return row
 }
