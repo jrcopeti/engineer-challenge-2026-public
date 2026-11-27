@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { setUnauthorizedHandler } from './api'
 import Login from './components/Login'
 import Inbox from './components/Inbox'
 import { User } from './types'
@@ -24,16 +25,23 @@ export default function App() {
     setUser(null)
   }
 
+  // An expired or revoked token sends the user back to the login screen.
+  useEffect(() => {
+    setUnauthorizedHandler(onLogout)
+    return () => setUnauthorizedHandler(null)
+  }, [])
+
   if (!token || !user) {
     return <Login onLogin={onLogin} />
   }
 
   return (
     <div className="app">
-      <div className="marquee">
+      <div className="marquee" aria-hidden="true">
         <span className="marquee-text">
           🚀🔥 WELCOME 2 PULSE™ — THE #1 FEEDBACK INBOX ON THE INFORMATION SUPERHIGHWAY!!! 🔥🚀 ⭐
-          best viewed in Netscape Navigator @ 800×600 ⭐ don't forget to sign our guestbook!!! 👽💾📠✨
+          best viewed in Netscape Navigator @ 800×600 ⭐ don't forget to sign our guestbook!!!
+          👽💾📠✨
         </span>
       </div>
       <header className="topbar">
@@ -45,7 +53,9 @@ export default function App() {
           </button>
         </div>
       </header>
-      <Inbox token={token} />
+      <main className="page">
+        <Inbox token={token} />
+      </main>
     </div>
   )
 }

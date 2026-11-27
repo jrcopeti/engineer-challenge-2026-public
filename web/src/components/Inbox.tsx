@@ -1,9 +1,18 @@
-import { useEffect, useState } from 'react'
-import { exportFeedbackUrl, fetchInbox, fetchMetrics, toggleResolve } from '../api'
+import { useCallback, useEffect, useState } from 'react'
+import { downloadExport, errorMessage, fetchInbox, fetchMetrics, setStatus } from '../api'
 import { FeedbackItem, Metrics } from '../types'
 import ItemDetail from './ItemDetail'
+import { useClickCooldown } from '../hooks/useClickCooldown'
 
 const PAGE_SIZE = 10
+const SEARCH_DEBOUNCE_MS = 300
+const POLL_INTERVAL_MS = 45000
+
+// due_at is stored as end of day in UTC; show that calendar date, not the viewer's
+// local conversion of it, so the table and the detail's date input agree.
+function formatDueDate(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, { timeZone: 'UTC' })
+}
 
 export default function Inbox({ token }: { token: string }) {
   const [items, setItems] = useState<FeedbackItem[]>([])
@@ -11,52 +20,109 @@ export default function Inbox({ token }: { token: string }) {
   const [page, setPage] = useState(1)
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+  // Bumped on return from the detail view so the list reflects edits made there.
+  const [reloadKey, setReloadKey] = useState(0)
+  const allowStatusClick = useClickCooldown()
 
-  const load = async () => {
-    const data = await fetchInbox(page, filter, search, token)
-    setItems(data.items)
-    setTotal(data.total)
-  }
-
+  // Search: wait for typing to pause, then fetch. Resets to page 1.
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search.trim())
+      setPage(1)
+    }, SEARCH_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  // Load on every change of page/filter/search, and poll on the *current* view.
+  // The AbortController drops responses that arrive after the inputs changed.
+  useEffect(() => {
+    const controller = new AbortController()
+    const load = async () => {
+      try {
+        const data = await fetchInbox(page, filter, debouncedSearch, token, controller.signal)
+        setItems(data.items)
+        setTotal(data.total)
+        setError('')
+      } catch (err) {
+        if (controller.signal.aborted) return
+        setError(errorMessage(err))
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
     load()
-  }, [page, filter, search])
+    const interval = setInterval(load, POLL_INTERVAL_MS)
+    return () => {
+      controller.abort()
+      clearInterval(interval)
+    }
+  }, [page, filter, debouncedSearch, token, reloadKey])
 
-  useEffect(() => {
-    fetchMetrics(token).then(setMetrics)
+  const loadMetrics = useCallback(() => {
+    fetchMetrics(token)
+      .then(setMetrics)
+      .catch(() => setMetrics(null))
   }, [token])
 
   useEffect(() => {
-    const interval = setInterval(async () => {
-      const data = await fetchInbox(page, filter, search, token)
-      const merged = data.items.map((incoming) => {
-        const local = items.find((it) => it.id === incoming.id)
-        return local ? { ...incoming, status: local.status } : incoming
-      })
-      setItems(merged)
-    }, 45000)
-    return () => clearInterval(interval)
-  }, [])
+    loadMetrics()
+  }, [loadMetrics])
 
-  const onResolve = async (item: FeedbackItem) => {
+  const onToggleStatus = async (item: FeedbackItem) => {
+    if (!allowStatusClick(item.id)) return
     const nextStatus = item.status === 'open' ? 'resolved' : 'open'
-    setItems(items.map((it) => (it.id === item.id ? { ...it, status: nextStatus } : it)))
-    await toggleResolve(item.id, token)
+    // Optimistic update, rolled back if the server disagrees.
+    setItems((current) =>
+      current.map((it) => (it.id === item.id ? { ...it, status: nextStatus } : it))
+    )
+    try {
+      const updated = await setStatus(item.id, nextStatus, token)
+      setItems((current) => current.map((it) => (it.id === item.id ? updated : it)))
+      loadMetrics()
+    } catch (err) {
+      setItems((current) => current.map((it) => (it.id === item.id ? item : it)))
+      setError(errorMessage(err))
+    }
+  }
+
+  const onExport = async () => {
+    try {
+      const blob = await downloadExport(filter, debouncedSearch, token)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'pulse-feedback-export.csv'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      // Revoke on a later tick: Firefox and Safari may start the download asynchronously.
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (err) {
+      setError(errorMessage(err))
+    }
   }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   if (selectedId !== null) {
     return (
+      // Keyed on the id so navigating between items (via customer history) remounts the
+      // view: summary, note draft and error state must never carry over to another item.
       <ItemDetail
+        key={selectedId}
         id={selectedId}
         token={token}
         onBack={() => {
           setSelectedId(null)
-          load()
+          setReloadKey((k) => k + 1)
+          loadMetrics()
         }}
+        onSelect={setSelectedId}
       />
     )
   }
@@ -65,19 +131,19 @@ export default function Inbox({ token }: { token: string }) {
     <div className="inbox">
       {metrics && (
         <div className="metrics-strip">
-          <div>
+          <div className="metric-open">
             <strong>{metrics.open}</strong>
             <span>Open</span>
           </div>
-          <div>
+          <div className="metric-resolved">
             <strong>{metrics.resolved}</strong>
             <span>Resolved</span>
           </div>
-          <div>
+          <div className="metric-urgent">
             <strong>{metrics.urgent}</strong>
             <span>Urgent</span>
           </div>
-          <div>
+          <div className="metric-overdue">
             <strong>{metrics.overdue}</strong>
             <span>Overdue</span>
           </div>
@@ -101,69 +167,80 @@ export default function Inbox({ token }: { token: string }) {
         <input
           className="search"
           value={search}
-          onChange={(e) => {
-            setSearch(e.target.value)
-            setPage(1)
-          }}
-          placeholder="Search VIPs, refunds, chaos..."
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search feedback"
+          aria-label="Search feedback"
         />
-        <button
-          className="export-button"
-          onClick={() => {
-            window.location.href = exportFeedbackUrl(filter, search, token)
-          }}
-        >
+        <button className="export-button" onClick={onExport}>
           Export CSV
         </button>
       </div>
 
-      <table className="feedback-table">
-        <thead>
-          <tr>
-            <th>Customer</th>
-            <th>Channel</th>
-            <th>Priority</th>
-            <th>Message</th>
-            <th>Owner</th>
-            <th>Status</th>
-            <th>Due</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <tr key={item.id} className="row" onClick={() => setSelectedId(item.id)}>
-              <td>{item.customer_name}</td>
-              <td>
-                <span className="channel">{item.channel}</span>
-              </td>
-              <td>
-                <span className={'priority ' + item.priority}>{item.priority}</span>
-              </td>
-              <td className="preview">
-                {item.message.slice(0, 70)}
-                {item.message.length > 70 ? '…' : ''}
-              </td>
-              <td>{item.assignee_name || 'Nobody'}</td>
-              <td>
-                <span className={'badge ' + item.status}>{item.status}</span>
-              </td>
-              <td>{item.due_at ? new Date(item.due_at).toLocaleDateString() : 'Someday'}</td>
-              <td>
-                <button
-                  className="link-button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onResolve(item)
-                  }}
-                >
-                  {item.status === 'open' ? 'Resolve' : 'Reopen'}
-                </button>
-              </td>
+      {error && <div className="error">{error}</div>}
+
+      <div className="table-wrap">
+        <table className="feedback-table">
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Channel</th>
+              <th>Priority</th>
+              <th>Message</th>
+              <th>Owner</th>
+              <th>Status</th>
+              <th>Due</th>
+              <th></th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {items.map((item) => (
+              <tr key={item.id} className="row" onClick={() => setSelectedId(item.id)}>
+                <td>{item.customer_name}</td>
+                <td>
+                  <span className="channel">{item.channel}</span>
+                </td>
+                <td>
+                  <span className={'pill priority ' + item.priority}>{item.priority}</span>
+                </td>
+                <td className="preview">
+                  {item.message.slice(0, 70)}
+                  {item.message.length > 70 ? '…' : ''}
+                </td>
+                <td>{item.assignee_name || <span className="muted">Unassigned</span>}</td>
+                <td>
+                  <span className={'pill badge ' + item.status}>{item.status}</span>
+                </td>
+                <td>
+                  {item.due_at ? (
+                    formatDueDate(item.due_at)
+                  ) : (
+                    <span className="muted">No due date</span>
+                  )}
+                </td>
+                <td>
+                  <button
+                    className="row-action"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onToggleStatus(item)
+                    }}
+                  >
+                    {item.status === 'open' ? 'Resolve' : 'Reopen'}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {!loading && items.length === 0 && !error && (
+        <div className="empty">
+          {debouncedSearch || filter !== 'all'
+            ? 'No feedback matches this search or filter.'
+            : 'No feedback yet.'}
+        </div>
+      )}
 
       <div className="pager">
         <button disabled={page <= 1} onClick={() => setPage(page - 1)}>
